@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+
+  <ThoughtDef>
+    <defName>SD_GiftLoved</defName>
+    <durationDays>3</durationDays>
+    <stackLimit>3</stackLimit>
+    <stages><li>
+      <label>loved gift</label>
+      <description>The farmer gave me something I adore.</description>
+      <baseMoodEffect>10</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_GiftLiked</defName>
+    <durationDays>2</durationDays>
+    <stackLimit>3</stackLimit>
+    <stages><li>
+      <label>liked gift</label>
+      <description>The farmer gave me something nice.</description>
+      <baseMoodEffect>5</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_GiftDisliked</defName>
+    <durationDays>2</durationDays>
+    <stackLimit>2</stackLimit>
+    <stages><li>
+      <label>disliked gift</label>
+      <description>The farmer gave me something I don't like.</description>
+      <baseMoodEffect>-4</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_GiftHated</defName>
+    <durationDays>4</durationDays>
+    <stackLimit>2</stackLimit>
+    <stages><li>
+      <label>hated gift</label>
+      <description>The farmer gave me something awful.</description>
+      <baseMoodEffect>-9</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Talked</defName>
+    <durationDays>1.5</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>chatted with the farmer</label>
+      <description>It was nice to talk with the farmer today.</description>
+      <baseMoodEffect>3</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Festival</defName>
+    <durationDays>3</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>town festival</label>
+      <description>The whole town got together. What a day!</description>
+      <baseMoodEffect>12</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Birthday</defName>
+    <durationDays>2</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>birthday</label>
+      <description>It's my birthday.</description>
+      <baseMoodEffect>8</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_BadWeather</defName>
+    <durationDays>1</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>miserable weather</label>
+      <description>The weather is dreary today.</description>
+      <baseMoodEffect>-3</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Paid</defName>
+    <durationDays>1</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>paid for the day</label>
+      <description>My wages were paid on time.</description>
+      <baseMoodEffect>4</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Unpaid</defName>
+    <durationDays>3</durationDays>
+    <stackLimit>3</stackLimit>
+    <stages><li>
+      <label>unpaid wages</label>
+      <description>I worked all day and wasn't paid.</description>
+      <baseMoodEffect>-8</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Raided</defName>
+    <durationDays>2</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>farm under attack</label>
+      <description>Monsters are attacking the valley.</description>
+      <baseMoodEffect>-5</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+</Defs>

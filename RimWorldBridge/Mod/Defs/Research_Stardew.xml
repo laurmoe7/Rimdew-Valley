@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <!-- Defs named SD_<Stardew machine>. Stardew sends research points; unlocking a project
+       re-enables the matching crafting recipe when "rd_gate on" is set. -->
+
+  <ResearchProjectDef>
+    <defName>SD_Keg</defName>
+    <label>kegs</label>
+    <description>Brew wine, beer and juice in the valley.</description>
+    <baseCost>300</baseCost>
+    <techLevel>Neolithic</techLevel>
+    <tab>Main</tab>
+    <researchViewX>0</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_PreservesJar</defName>
+    <label>preserves jars</label>
+    <description>Pickling and jam-making.</description>
+    <baseCost>300</baseCost>
+    <techLevel>Neolithic</techLevel>
+    <tab>Main</tab>
+    <researchViewX>0</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Loom</defName>
+    <label>looms</label>
+    <description>Spin wool into cloth.</description>
+    <baseCost>400</baseCost>
+    <techLevel>Neolithic</techLevel>
+    <tab>Main</tab>
+    <researchViewX>1</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_CheesePress</defName>
+    <label>cheese presses</label>
+    <description>Turn milk into cheese.</description>
+    <baseCost>500</baseCost>
+    <techLevel>Medieval</techLevel>
+    <tab>Main</tab>
+    <researchViewX>1</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_MayonnaiseMachine</defName>
+    <label>mayonnaise machines</label>
+    <description>Industrial egg processing.</description>
+    <baseCost>600</baseCost>
+    <techLevel>Medieval</techLevel>
+    <tab>Main</tab>
+    <researchViewX>2</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_OilMaker</defName>
+    <label>oil makers</label>
+    <description>Press oil from crops.</description>
+    <baseCost>700</baseCost>
+    <techLevel>Medieval</techLevel>
+    <tab>Main</tab>
+    <researchViewX>2</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Furnace</defName>
+    <label>furnaces</label>
+    <description>Smelt ore into bars.</description>
+    <baseCost>800</baseCost>
+    <techLevel>Medieval</techLevel>
+    <tab>Main</tab>
+    <researchViewX>3</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+</Defs>

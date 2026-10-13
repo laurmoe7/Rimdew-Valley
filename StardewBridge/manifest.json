@@ -1,0 +1,9 @@
+{
+  "Name": "Stardew Bridge",
+  "Author": "laurm",
+  "Version": "0.1.0",
+  "Description": "Connects Stardew Valley to RimWorld through the RimDew relay hub.",
+  "UniqueID": "laurm.StardewBridge",
+  "EntryDll": "StardewBridge.dll",
+  "MinimumApiVersion": "4.0.0"
+}
