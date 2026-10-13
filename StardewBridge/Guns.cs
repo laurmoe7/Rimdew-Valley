@@ -307,6 +307,18 @@ public partial class ModEntry
         _ => Guns[5]       // Sniper Rifle
     };
 
+    /// <summary>Guns from older builds were swords; swap them for the object version (right click then works normally).</summary>
+    private void ConvertOldGuns()
+    {
+        var items = Game1.player.Items;
+        for (int i = 0; i < items.Count; i++)
+            if (items[i] is { } it && it.QualifiedItemId.StartsWith("(W)" + GunPrefix))
+            {
+                items[i] = ItemRegistry.Create("(O)" + it.ItemId);
+                Monitor.Log($"Converted old gun {it.ItemId} to the new object version.", LogLevel.Info);
+            }
+    }
+
     private int toolLockTicks;
 
     /// <summary>Free the farmer from a stuck tool/special-move animation.</summary>
@@ -335,6 +347,7 @@ public partial class ModEntry
         bool freshPress = leftDown && !leftWasDown;
         leftWasDown = leftDown;
 
+        if (e.IsMultipleOf(60)) ConvertOldGuns();
         var gun = HeldGun();
         if (gun == null) return;
         float angle = AimAngle();
@@ -361,6 +374,7 @@ public partial class ModEntry
     private void SuppressSwing(ButtonPressedEventArgs e)
     {
         if (Game1.activeClickableMenu != null || HeldGun() == null) return;
+        if (e.Button.IsActionButton()) Monitor.Log($"Action button pressed holding {Game1.player.CurrentItem?.QualifiedItemId}.", LogLevel.Debug);
         // New guns are plain objects (no swing, no special move), so right click still opens doors and talks to people.
         // Guns made by an older version of this mod are swords: block their swing and special move.
         if (Game1.player.CurrentItem?.QualifiedItemId.StartsWith("(W)") == true && (e.Button.IsUseToolButton() || e.Button.IsActionButton()))

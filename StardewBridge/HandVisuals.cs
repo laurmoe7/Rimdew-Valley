@@ -221,7 +221,7 @@ public partial class ModEntry
         {
             string name = (string)f["name"]!;
             var existing = LastHands.FirstOrDefault(h => (string?)h["name"] == name) as JObject;
-            if (existing == null) LastHands.Add(new JObject(f) { ["hours"] = 0.0 });
+            if (existing == null) { var copy = (JObject)f.DeepClone(); copy["hours"] = 0.0; LastHands.Add(copy); }
             else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status" }) existing[key] = f[key];
         }
         foreach (var gone in LastHands.Where(h => !data.Hands.Contains((string)h["name"]!)).ToList()) gone.Remove();
@@ -296,7 +296,7 @@ public partial class ModEntry
         a.Armed = true;
         a.Activity = "defending";
 
-        var feet = a.Pos + new Vector2(32, 64);
+        var feet = a.Pos + new Vector2(32, 32);   // a character's standing point is the middle of its 64px box
         var target = monsters.OrderBy(m => Vector2.DistanceSquared(m.Position, feet)).First();
         var to = target.Position + new Vector2(32, 32) - feet;
         float dist = to.Length();
@@ -304,7 +304,8 @@ public partial class ModEntry
         a.Dir = Math.Abs(to.X) > Math.Abs(to.Y) ? (to.X > 0 ? 1 : 3) : (to.Y > 0 ? 0 : 2);
 
         var monsterTile = ToTile(target.Position);
-        bool clear = dist <= 520 && HasLineOfSight(ToTile(a.Pos), monsterTile);
+        int slot = Math.Abs(StableSeed(a.Name)) % 5;                          // 0..4: personal stand-off distance
+        bool clear = dist <= 360 + slot * 55 && HasLineOfSight(ToTile(a.Pos), monsterTile);
         if (clear) a.Moving = false;
         else
         {
@@ -329,6 +330,29 @@ public partial class ModEntry
                 SpawnBullet(Game1.getFarm(), gun, muzzle, ang, Math.Max(1, dmg), p == 0);
             }
         }
+    }
+
+    /// <summary>Keep hands from piling onto one tile: push overlapping hands apart, but only onto walkable ground.</summary>
+    private void SeparateHands()
+    {
+        var list = actors.Values.Where(a => !a.Inside).ToList();
+        for (int i = 0; i < list.Count; i++)
+            for (int j = i + 1; j < list.Count; j++)
+            {
+                var d = list[j].Pos - list[i].Pos;
+                float dist = d.Length();
+                if (dist >= 56) continue;
+                var push = dist < 0.5f ? new Vector2(1, 0) : d / dist;
+                float amount = (56 - dist) * 0.5f;
+                TryNudge(list[i], -push * amount);
+                TryNudge(list[j], push * amount);
+            }
+    }
+
+    private void TryNudge(HandActor a, Vector2 by)
+    {
+        var np = a.Pos + by;
+        if (Walkable(ToTile(np))) a.Pos = np;
     }
 
     private readonly List<(int tick, int count, string kind)> pendingSpawns = new();
@@ -396,6 +420,8 @@ public partial class ModEntry
                 if (++a.WorkTimer >= WorkTicks) { Perform(a.Current); a.Current = null; }
             }
         }
+
+        SeparateHands();
 
         if (batchActive && actors.Values.All(a => a.Current == null && a.Jobs.Count == 0))
         {
@@ -484,7 +510,7 @@ public partial class ModEntry
                 if (a.Armed && a.Weapon != null)
                 {
                     int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
-                    DrawGunSprite(b, a.Weapon, HandPosFor(a.Pos + new Vector2(32, 64), facing), a.Aim, facing, a.Pos.Y + 64, a.LastShot);
+                    DrawGunSprite(b, a.Weapon, HandPosFor(a.Pos + new Vector2(32, 32), facing), a.Aim, facing, a.Pos.Y + 64, a.LastShot);
                 }
             }
             else b.Draw(Game1.shadowTexture, local + new Vector2(32, 60), null, Color.White, 0f,

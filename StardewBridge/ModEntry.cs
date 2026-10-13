@@ -47,6 +47,7 @@ public partial class ModEntry : Mod
         helper.Events.Content.AssetRequested += OnAssetRequested;
         helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
+        helper.Events.GameLoop.GameLaunched += (_, _) => DevDump();
         RegisterCommands();
     }
 

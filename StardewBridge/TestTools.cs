@@ -48,22 +48,25 @@ public partial class ModEntry
         Game1.activeClickableMenu = new StardewValley.Menus.CarpenterMenu(TestBuilder);
     }
 
-    /// <summary>Iridium Axe, Pickaxe, Hoe and Watering Can (added if missing), plus the other basic tools upgraded.</summary>
+    /// <summary>Replace (or add) Axe, Pickaxe, Hoe, Watering Can and Pan with their Iridium versions. In 1.6 an upgraded tool is
+    /// its own item (IridiumAxe...), so setting UpgradeLevel on the basic tool is not enough.</summary>
     internal void MaxTools()
     {
         var p = Game1.player;
-        foreach (var id in new[] { "(T)Axe", "(T)Pickaxe", "(T)Hoe", "(T)WateringCan" })
+        foreach (var kind in new[] { "Axe", "Pickaxe", "Hoe", "WateringCan", "Pan" })
         {
-            var tool = p.Items.OfType<StardewValley.Tool>().FirstOrDefault(t => t.QualifiedItemId == id);
-            if (tool == null)
-            {
-                tool = (StardewValley.Tool)ItemRegistry.Create(id);
-                p.addItemByMenuIfNecessary(tool);
-            }
-            tool.UpgradeLevel = 4;   // iridium
-            if (tool is StardewValley.Tools.WateringCan can) can.WaterLeft = can.waterCanMax;
+            var iridium = (StardewValley.Tool?)ItemRegistry.Create("(T)Iridium" + kind, 1, allowNull: true);
+            if (iridium == null) { Monitor.Log($"No item (T)Iridium{kind} in this game version.", LogLevel.Warn); continue; }
+            if (iridium is StardewValley.Tools.WateringCan can) can.WaterLeft = can.waterCanMax;
+
+            int slot = -1;
+            for (int i = 0; i < p.Items.Count; i++)
+                if (p.Items[i] is StardewValley.Tool t && (t.ItemId == kind || t.ItemId.EndsWith(kind) && (t.UpgradeLevel > 0 || t.ItemId.Length > kind.Length)))
+                { slot = i; break; }
+            if (slot >= 0) p.Items[slot] = iridium;
+            else p.addItemByMenuIfNecessary(iridium);
         }
-        Hud("Axe, Pickaxe, Hoe and Watering Can are now Iridium.", HUDMessage.achievement_type);
+        Hud("Axe, Pickaxe, Hoe, Watering Can and Pan are now Iridium.", HUDMessage.achievement_type);
     }
 
     internal void MaxBackpack()
@@ -113,6 +116,22 @@ public partial class ModEntry
     {
         Game1.timeOfDay = time;
         Hud($"It is now {time / 100}:{time % 100:00}.", HUDMessage.achievement_type);
+    }
+
+    /// <summary>Developer aid: if Mods/StardewBridge/dev_dump.flag exists at launch, save the farmer sprite sheet as a PNG.</summary>
+    private void DevDump()
+    {
+        string flag = Path.Combine(Helper.DirectoryPath, "dev_dump.flag");
+        if (!File.Exists(flag)) return;
+        try
+        {
+            var tex = Helper.GameContent.Load<Microsoft.Xna.Framework.Graphics.Texture2D>("Characters/Farmer/farmer_base");
+            using (var fs = File.Create(Path.Combine(Helper.DirectoryPath, "farmer_base_dump.png")))
+                tex.SaveAsPng(fs, tex.Width, tex.Height);
+            Monitor.Log($"Dumped farmer sheet ({tex.Width}x{tex.Height}).", LogLevel.Info);
+            File.Delete(flag);
+        }
+        catch (Exception e) { Monitor.Log("Dev dump failed: " + e.Message, LogLevel.Warn); }
     }
 
     internal void GrowAllCrops()
