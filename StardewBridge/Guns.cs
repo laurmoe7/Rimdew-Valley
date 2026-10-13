@@ -303,8 +303,8 @@ public partial class ModEntry
         }
         else toolLockTicks = 0;
 
-        // Raw mouse state: the swing block above suppresses the button for the game, so don't depend on SMAPI's view of it.
-        bool leftDown = Game1.input.GetMouseState().LeftButton == Microsoft.Xna.Framework.Input.ButtonState.Pressed;
+        // Hardware mouse state: Game1.input is SMAPI's filtered view, which hides buttons we suppress (left click, to block the swing).
+        bool leftDown = Microsoft.Xna.Framework.Input.Mouse.GetState().LeftButton == Microsoft.Xna.Framework.Input.ButtonState.Pressed;
         bool freshPress = leftDown && !leftWasDown;
         leftWasDown = leftDown;
 

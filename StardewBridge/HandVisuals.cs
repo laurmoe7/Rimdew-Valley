@@ -37,6 +37,8 @@ public partial class ModEntry
         public readonly Queue<HandJob> Jobs = new();
         public string Activity = "resting";
         public bool Armed;
+        public Vector2? Door;   // bunkhouse door tile (px) if they have one
+        public bool Inside;     // currently indoors: not drawn, not clickable
         public float Aim;
         public Gun? Weapon;
         public int NextShot, LastShot = -100;
@@ -76,11 +78,21 @@ public partial class ModEntry
         return new Vector2((door.X + 6 + j % 4) * 64, (door.Y + 1 + j / 4) * 64);
     }
 
+    /// <summary>The bunkhouse door (px) hand i lives behind, or null if there is no bunkhouse for them.</summary>
+    private Vector2? DoorFor(int i)
+    {
+        var bunks = Game1.getFarm().buildings.Where(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0).ToList();
+        int idx = i / BunkCapacity;
+        if (idx >= bunks.Count) return null;
+        var b = bunks[idx];
+        return new Vector2((b.tileX.Value + b.humanDoor.Value.X) * 64, (b.tileY.Value + b.humanDoor.Value.Y) * 64);
+    }
+
     /// <summary>Re-evaluate homes (a bunkhouse may have just been finished).</summary>
     private void RefreshHomes()
     {
         for (int i = 0; i < data.Hands.Count; i++)
-            if (actors.TryGetValue(data.Hands[i], out var a)) a.Home = HomeFor(i);
+            if (actors.TryGetValue(data.Hands[i], out var a)) { a.Home = HomeFor(i); a.Door = DoorFor(i); if (a.Door == null) a.Inside = false; }
     }
 
     /// <summary>Make the on-screen hands match the hired list. reset = send everyone home and drop pending chores.</summary>
@@ -96,12 +108,15 @@ public partial class ModEntry
                 a.Body = MakeBody(name);
                 if (a.Body == null) a.Sheet = LoadHandSheet(i);
                 a.Home = a.Pos = HomeFor(i);
+                a.Door = DoorFor(i);
                 actors[name] = a;
             }
             a.Home = HomeFor(i);
+            a.Door = DoorFor(i);
             if (reset)
             {
-                a.Pos = a.Home;
+                a.Pos = a.Door ?? a.Home;
+                a.Inside = a.Door.HasValue;   // they spend the night indoors
                 a.Jobs.Clear();
                 a.Current = null;
                 a.Activity = "resting";
@@ -320,12 +335,25 @@ public partial class ModEntry
         var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)
         {
-            a.Armed = false;
-            if (monsters.Count > 0 && HandCanFight(a)) { Fight(a, monsters); continue; }
+            // Hands always carry a gun matched to their RimWorld Shooting skill, held low when not fighting.
+            var skillInfo = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
+            a.Weapon = GunForSkill((int?)skillInfo?["shooting"] ?? 3);
+            a.Armed = !a.Inside;
+            a.Aim = a.Dir switch { 0 => 1.25f, 1 => 0.35f, 2 => -1.25f, _ => MathHelper.Pi - 0.35f };
+
+            bool busy = a.Current != null || a.Jobs.Count > 0;
+            bool fighting = monsters.Count > 0 && HandCanFight(a);
+            if (a.Inside)
+            {
+                if (!busy && !fighting) { a.Moving = false; a.Activity = "inside"; continue; }
+                a.Inside = false;                         // step out of the door
+                if (a.Door.HasValue) a.Pos = a.Door.Value;
+            }
+            if (fighting) { Fight(a, monsters); continue; }
 
             if (a.Current == null && a.Jobs.Count > 0) { a.Current = a.Jobs.Dequeue(); a.WorkTimer = 0; }
 
-            Vector2 target = a.Current == null ? a.Home : StandSpot(a.Current);
+            Vector2 target = a.Current == null ? (a.Door ?? a.Home) : StandSpot(a.Current);
             var d = target - a.Pos;
             float dist = d.Length();
             if (dist > HandSpeed)
@@ -339,7 +367,12 @@ public partial class ModEntry
             {
                 a.Pos = target;
                 a.Moving = false;
-                if (a.Current == null) { a.Activity = "resting"; continue; }
+                if (a.Current == null)
+                {
+                    if (a.Door.HasValue) { a.Inside = true; a.Activity = "inside"; }   // walked up to the door: go in
+                    else a.Activity = "resting";
+                    continue;
+                }
                 a.Dir = 2; // face the crop/animal
                 a.Activity = a.Current.Kind switch { "water" => "watering", "harvest" => "harvesting", _ => "feeding" };
                 if (++a.WorkTimer >= WorkTicks) { Perform(a.Current); a.Current = null; }
@@ -422,6 +455,7 @@ public partial class ModEntry
         var b = e.SpriteBatch;
         foreach (var a in actors.Values)
         {
+            if (a.Inside) continue;
             var local = Game1.GlobalToLocal(Game1.viewport, a.Pos);
             float depth = (a.Pos.Y + 64f) / 10000f;
             float bobY = a.Current != null && !a.Moving ? (float)Math.Sin(Game1.ticks / 4.0) * 3f : 0f;
@@ -474,7 +508,7 @@ public partial class ModEntry
     private HandActor? HandAt(Vector2 absolutePixels)
     {
         foreach (var a in actors.Values)
-            if (new Rectangle((int)a.Pos.X, (int)a.Pos.Y - 64, 64, 128).Contains(absolutePixels)) return a;
+            if (!a.Inside && new Rectangle((int)a.Pos.X, (int)a.Pos.Y - 64, 64, 128).Contains(absolutePixels)) return a;
         return null;
     }
 }
