@@ -30,7 +30,7 @@ public class RimDewMenu : IClickableMenu
     private void Reposition()
     {
         width = Math.Min(1000, Game1.uiViewport.Width - 64);
-        height = Math.Min(720, Game1.uiViewport.Height - 64);
+        height = Math.Min(880, Game1.uiViewport.Height - 40);
         xPositionOnScreen = (Game1.uiViewport.Width - width) / 2;
         yPositionOnScreen = (Game1.uiViewport.Height - height) / 2;
         initializeUpperRightCloseButton();
@@ -261,7 +261,7 @@ public class RimDewMenu : IClickableMenu
 
         var sections = new (string title, (string label, Action act)[] buttons)[]
         {
-            ("Farm", new (string, Action)[] { ("Clear weeds/rocks", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
+            ("Farm", new (string, Action)[] { ("Clear debris", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
                 ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit) }),
             ("Monsters (local)", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
@@ -280,20 +280,20 @@ public class RimDewMenu : IClickableMenu
                 ("Cold snap", () => mod.FireRimWorldIncident("ColdSnap")) }),
         };
 
-        const int cols = 4, gap = 10, bh = 40;
+        const int cols = 4, gap = 10, bh = 38;
         int bw = (c.Width - gap * (cols - 1)) / cols;
         int y = c.Y;
         foreach (var (title, buttons) in sections)
         {
             Text(b, title, c.X, y);
-            y += 28;
+            y += 26;
             for (int i = 0; i < buttons.Length; i++)
             {
                 int col = i % cols, row = i / cols;
                 var (label, act) = buttons[i];
-                Button(b, new Rectangle(c.X + col * (bw + gap), y + row * (bh + 6), bw, bh), label, act);
+                Button(b, new Rectangle(c.X + col * (bw + gap), y + row * (bh + 4), bw, bh), label, act);
             }
-            y += (buttons.Length + cols - 1) / cols * (bh + 6) + 6;
+            y += (buttons.Length + cols - 1) / cols * (bh + 4) + 6;
         }
     }
 }
