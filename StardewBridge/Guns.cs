@@ -35,6 +35,7 @@ public partial class ModEntry
     private readonly Dictionary<string, Texture2D> gunSprites = new(); // cropped, full resolution (held in hand)
     private Texture2D? gunIconSheet;
     private int nextShotTick;
+    private int lastShotTick = -100;
 
     // ---------- content: item definitions + inventory icons ----------
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
@@ -166,19 +167,27 @@ public partial class ModEntry
         return id.StartsWith(GunPrefix) ? Guns.FirstOrDefault(g => GunPrefix + g.Id == id) : null;
     }
 
-    private Vector2 Muzzle(float angle)
+    /// <summary>World position of the farmer's hands for the way they face (feet-relative offsets).</summary>
+    private Vector2 HandPos()
     {
         var c = Game1.player.StandingPixel;
-        return new Vector2(c.X, c.Y - 40) + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * 44f;
+        Vector2 off = Game1.player.FacingDirection switch
+        {
+            1 => new Vector2(18, -34),    // right
+            3 => new Vector2(-18, -34),   // left
+            2 => new Vector2(14, -26),    // down (toward camera)
+            _ => new Vector2(-14, -38)    // up
+        };
+        return new Vector2(c.X, c.Y) + off;
     }
 
     private float AimAngle()
     {
-        var cursor = Helper.Input.GetCursorPosition().AbsolutePixels;
-        var c = Game1.player.StandingPixel;
-        var d = cursor - new Vector2(c.X, c.Y - 40);
+        var d = Helper.Input.GetCursorPosition().AbsolutePixels - HandPos();
         return (float)Math.Atan2(d.Y, d.X);
     }
+
+    private Vector2 Muzzle(float angle) => HandPos() + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * 40f;
 
     private int toolLockTicks;
 
@@ -213,6 +222,7 @@ public partial class ModEntry
         bool wantsFire = gun.Auto ? state is SButtonState.Pressed or SButtonState.Held : state == SButtonState.Pressed;
         if (!wantsFire || e.Ticks < nextShotTick) return;
         nextShotTick = (int)e.Ticks + gun.Cooldown;
+        lastShotTick = (int)e.Ticks;
 
         var rng = Game1.random;
         for (int p = 0; p < gun.Pellets; p++)
@@ -243,13 +253,19 @@ public partial class ModEntry
         if (tex == null) return;
 
         float angle = AimAngle();
-        bool left = Math.Cos(angle) < 0;
+        var dir = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle));
+        bool left = dir.X < 0;
+        var hand = HandPos();
+        int sinceShot = (int)Game1.ticks - lastShotTick;
+        if (sinceShot >= 0 && sinceShot < 6) hand -= dir * (6 - sinceShot) * 1.2f;   // recoil kick
+
+        float scale = 52f / Math.Max(tex.Width, tex.Height);                         // longest side ~52 px
+        // RimWorld guns face right with the grip near the left-centre; the grip sits in the hand.
+        var origin = new Vector2(left ? tex.Width * 0.72f : tex.Width * 0.28f, tex.Height * 0.62f);
         var c = Game1.player.StandingPixel;
-        var pivot = Game1.GlobalToLocal(Game1.viewport, new Vector2(c.X, c.Y - 40));
-        float width = Math.Max(tex.Width, tex.Height);
-        float scale = 56f / width;                                   // longest side ~56 px on screen
-        e.SpriteBatch.Draw(tex, pivot, null, Color.White, left ? angle + (float)Math.PI : angle,
-            new Vector2(left ? tex.Width * 0.7f : tex.Width * 0.3f, tex.Height / 2f), scale,
-            left ? SpriteEffects.FlipHorizontally : SpriteEffects.None, (c.Y + 8) / 10000f);
+        float depth = (Game1.player.FacingDirection == 0 ? c.Y - 6 : c.Y + 10) / 10000f;   // behind the body when facing up
+        e.SpriteBatch.Draw(tex, Game1.GlobalToLocal(Game1.viewport, hand), null, Color.White,
+            left ? angle + (float)Math.PI : angle, origin, scale,
+            left ? SpriteEffects.FlipHorizontally : SpriteEffects.None, depth);
     }
 }

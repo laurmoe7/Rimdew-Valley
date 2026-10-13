@@ -98,13 +98,14 @@ namespace RimDewBridge
                 case "npc_event": NpcEvent(m.Str("npc"), m.Str("kind")); break;
                 case "player_hurt": Hurt(m.Num("amount"), m.Str("kind")); break;
                 case "tend": Tend((float)m.Num("quality", 0.4)); break;
-                case "hire": Ensure("hand:" + m.Str("name"), m.Str("name")); break;
+                case "hire": Ensure("hand:" + m.Str("name"), m.Str("name")); SendHandsInfo(); break;
                 case "fire": Fire(m.Str("name")); break;
                 case "priority": handPriority[m.Str("name") + "|" + m.Str("task")] = (int)m.Num("value"); break;
                 case "research_set": researchTarget = m.Str("id"); break;
                 case "day_end": BeginDay(m); break;
                 // --- test tools (Stardew menu > Test tab) ---
                 case "report":
+                    SendHandsInfo();
                     Send(new Dictionary<string, object> { { "type", "npc_state" }, { "apply", false }, { "npcs", NpcReport() } });
                     SendHealth();
                     SendResearch();
@@ -128,6 +129,7 @@ namespace RimDewBridge
             p = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Colonist, Faction.OfPlayer,
                 PawnGenerationContext.NonPlayer, -1, forceGenerateNewPawn: true, canGeneratePawnRelations: false));
             p.Name = new NameTriple(name, name, "");
+            GainThought(p, "valley_life"); // baseline mood from day one, not just after the first night
             GenSpawn.Spawn(p, CellFinder.RandomClosewalkCellNear(map.Center, map, 15), map);
             if (p.drafter != null) p.drafter.Drafted = true; // stand still; no jobs, no wandering
             pawns[key] = p;
@@ -287,6 +289,26 @@ namespace RimDewBridge
         {
             int v;
             return handPriority.TryGetValue(name + "|" + task, out v) ? v : def;
+        }
+
+        /// <summary>Hand status without running a night: mood, skills and whether they could work right now.</summary>
+        private void SendHandsInfo()
+        {
+            var hands = new List<object>();
+            foreach (var kv in pawns)
+            {
+                var p = kv.Value;
+                if (!kv.Key.StartsWith("hand:") || p == null || p.Dead || p.needs == null || p.needs.mood == null) continue;
+                float mood = p.needs.mood.CurLevelPercentage;
+                bool able = !p.Downed && !p.InMentalState;
+                hands.Add(new Dictionary<string, object>
+                {
+                    { "name", kv.Key.Substring(5) }, { "mood", Math.Round(mood, 2) },
+                    { "plants", p.skills.GetSkill(SkillDefOf.Plants).Level }, { "animals", p.skills.GetSkill(SkillDefOf.Animals).Level },
+                    { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
+                });
+            }
+            Send(new Dictionary<string, object> { { "type", "hands_info" }, { "hands", hands } });
         }
 
         private Dictionary<string, object> WorkReport(Dictionary<string, object> backlog)

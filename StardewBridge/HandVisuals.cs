@@ -170,6 +170,19 @@ public partial class ModEntry
         catch (Exception e) { Monitor.Log($"Could not load hand sprite '{names[i % names.Count]}': {e.Message}", LogLevel.Warn); return null; }
     }
 
+    /// <summary>Update mood/skills/status from a live report, keeping last night's chore counts and hours.</summary>
+    private void MergeHandsInfo(JArray fresh)
+    {
+        foreach (var f in fresh)
+        {
+            string name = (string)f["name"]!;
+            var existing = LastHands.FirstOrDefault(h => (string?)h["name"] == name) as JObject;
+            if (existing == null) LastHands.Add(new JObject(f) { ["hours"] = 0.0 });
+            else foreach (var key in new[] { "mood", "plants", "animals", "status" }) existing[key] = f[key];
+        }
+        foreach (var gone in LastHands.Where(h => !data.Hands.Contains((string)h["name"]!)).ToList()) gone.Remove();
+    }
+
     // ---------- assigning chores (from RimWorld's per-hand report) ----------
     private List<T> PickNearest<T>(List<T> pool, int n, Vector2 startPx, Func<T, Vector2> posPx)
     {

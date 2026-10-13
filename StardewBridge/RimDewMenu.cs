@@ -24,6 +24,7 @@ public class RimDewMenu : IClickableMenu
     {
         this.mod = mod;
         tab = startTab;
+        if (tab == 1) mod.RefreshRimWorld();
         Reposition();
     }
 
@@ -109,7 +110,7 @@ public class RimDewMenu : IClickableMenu
         {
             int idx = i;
             var r = new Rectangle(tx, yPositionOnScreen + 90, 160, 48);
-            Button(b, r, Tabs[i], () => { tab = idx; scroll = 0; }, active: tab == i);
+            Button(b, r, Tabs[i], () => { tab = idx; scroll = 0; if (idx == 1) mod.RefreshRimWorld(); }, active: tab == i);
             tx += 170;
         }
 

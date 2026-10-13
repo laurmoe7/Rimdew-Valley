@@ -170,6 +170,7 @@ public partial class ModEntry : Mod
             case "health_state": OnHealthState(msg); break;
             case "incident": OnIncident(msg); break;
             case "work_done": OnWorkDone(msg); break;
+            case "hands_info": MergeHandsInfo((JArray)msg["hands"]!); break;
             case "research_state": OnResearchState(msg); break;
             case "research_unlocked": OnResearchUnlocked((string?)msg["id"] ?? ""); break;
             default: Monitor.Log($"Hub message: {msg}", LogLevel.Trace); break;
