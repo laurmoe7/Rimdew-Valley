@@ -180,8 +180,29 @@ public partial class ModEntry
         return (float)Math.Atan2(d.Y, d.X);
     }
 
+    private int toolLockTicks;
+
+    /// <summary>Free the farmer from a stuck tool/special-move animation.</summary>
+    internal void Unstick()
+    {
+        var p = Game1.player;
+        p.completelyStopAnimatingOrDoingAction();
+        p.UsingTool = false;
+        p.canReleaseTool = false;
+        p.CanMove = true;
+        toolLockTicks = 0;
+    }
+
     private void TickGuns(UpdateTickedEventArgs e)
     {
+        // Safety net: holding a gun while locked in a tool action for ~0.5s means a special move got stuck.
+        bool holdingGun = Game1.player.CurrentItem?.ItemId?.StartsWith(GunPrefix) == true;
+        if (holdingGun && Game1.player.UsingTool && Game1.activeClickableMenu == null)
+        {
+            if (++toolLockTicks > 30) { Unstick(); Monitor.Log("Freed the farmer from a stuck weapon action.", LogLevel.Info); }
+        }
+        else toolLockTicks = 0;
+
         var gun = HeldGun();
         if (gun == null) return;
         float angle = AimAngle();
