@@ -209,10 +209,19 @@ namespace RimDewBridge
             if (p == null || p.Dead) return;
             foreach (var h in p.health.hediffSet.hediffs.ToList())
                 if (h.TendableNow()) h.Tended(quality, quality, 0);
-            SendHealth();
+            SendHealth(false, true);
         }
 
-        private void SendHealth(bool day = false)
+        /// <summary>A night's rest heals wounds faster than the (shortened) sim day would: tended wounds heal twice as much.</summary>
+        private void HealOvernight()
+        {
+            var p = Get("farmer");
+            if (p == null || p.Dead) return;
+            foreach (var h in p.health.hediffSet.hediffs.OfType<Hediff_Injury>().ToList())
+                if (!h.IsPermanent()) h.Heal(h.IsTended() ? 4f : 2f);
+        }
+
+        private void SendHealth(bool day = false, bool tend = false)
         {
             var p = Get("farmer");
             if (p == null) return;
@@ -221,11 +230,11 @@ namespace RimDewBridge
             foreach (var h in p.health.hediffSet.hediffs)
             {
                 if (!h.Visible || injuries.Count >= 8) continue;
-                injuries.Add(h.LabelCap + (h.Part != null ? " (" + h.Part.Label + ")" : ""));
+                injuries.Add(h.LabelCap + (h.Part != null ? " (" + h.Part.Label + ")" : "") + (h.IsTended() ? " [tended]" : ""));
             }
             Send(new Dictionary<string, object>
             {
-                { "type", "health_state" }, { "phase", day ? "day" : "event" },
+                { "type", "health_state" }, { "phase", day ? "day" : tend ? "tend" : "event" },
                 { "dead", p.Dead },
                 { "downed", p.Downed },
                 { "health_pct", Math.Round(p.health.summaryHealth.SummaryHealthPercent, 2) },
@@ -265,6 +274,7 @@ namespace RimDewBridge
         private void FinishDay()
         {
             var m = currentDay ?? new Dictionary<string, object>();
+            HealOvernight();
             Send(new Dictionary<string, object> { { "type", "npc_state" }, { "npcs", NpcReport() } });
             SendHealth(true);
             Send(WorkReport(m.Obj_("backlog")));

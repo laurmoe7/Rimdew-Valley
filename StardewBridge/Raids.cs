@@ -53,36 +53,49 @@ public partial class ModEntry
         Hud(message, HUDMessage.error_type);
     }
 
+    /// <summary>Spawn in scattered groups on open ground anywhere on the farm, away from the player, so raids
+    /// can't be stopped by fencing off one entrance.</summary>
     internal void SpawnMonsters(int count, string kind)
     {
         var farm = Game1.getFarm();
         var rng = Game1.random;
         int w = farm.map.Layers[0].LayerWidth, h = farm.map.Layers[0].LayerHeight;
-        for (int i = 0; i < count; i++)
+        var player = Game1.player.Tile;
+
+        bool Ok(Vector2 t) => t.X > 1 && t.Y > 1 && t.X < w - 2 && t.Y < h - 2
+                              && Vector2.Distance(t, player) >= 10 && farm.CanSpawnCharacterHere(t);
+
+        int groupSize = Math.Clamp(count / 3, 1, 4), placed = 0;
+        while (placed < count)
         {
-            Vector2 tile = Vector2.Zero;
-            for (int tries = 0; tries < 40; tries++)
+            Vector2 center = Vector2.Zero;
+            bool found = false;
+            for (int tries = 0; tries < 200 && !found; tries++)
             {
-                // Spawn along the farm's edges so they walk in.
-                tile = rng.Next(4) switch
-                {
-                    0 => new Vector2(rng.Next(w), 1),
-                    1 => new Vector2(rng.Next(w), h - 2),
-                    2 => new Vector2(1, rng.Next(h)),
-                    _ => new Vector2(w - 2, rng.Next(h))
-                };
-                if (farm.CanSpawnCharacterHere(tile)) break;
+                center = new Vector2(rng.Next(2, w - 2), rng.Next(2, h - 2));
+                found = Ok(center);
             }
-            var pos = tile * 64f;
-            Monster m = kind switch
+            if (!found) break; // nowhere open (very unlikely)
+            for (int g = 0; g < groupSize && placed < count; g++)
             {
-                "slime" => new GreenSlime(pos, 0),
-                "bat" => new Bat(pos),
-                "brute" => new ShadowBrute(pos),
-                "skeleton" => new Skeleton(pos),
-                _ => new Grub(pos)
-            };
-            farm.characters.Add(m);
+                var tile = center;
+                for (int tries = 0; tries < 12; tries++)
+                {
+                    var cand = center + new Vector2(rng.Next(-3, 4), rng.Next(-3, 4));
+                    if (Ok(cand)) { tile = cand; break; }
+                }
+                var pos = tile * 64f;
+                Monster m = kind switch
+                {
+                    "slime" => new GreenSlime(pos, 0),
+                    "bat" => new Bat(pos),
+                    "brute" => new ShadowBrute(pos),
+                    "skeleton" => new Skeleton(pos),
+                    _ => new Grub(pos)
+                };
+                farm.characters.Add(m);
+                placed++;
+            }
         }
     }
 

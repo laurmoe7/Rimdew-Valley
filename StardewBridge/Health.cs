@@ -13,6 +13,7 @@ public partial class ModEntry
 {
     private const string InjuryBuffId = "laurm.StardewBridge/injury";
     private int lastHealth;
+    private double lastTendQuality;
     private double bleed;
     private int ignoreHealthUntil;
 
@@ -70,6 +71,14 @@ public partial class ModEntry
             Game1.player.Stamina = 0;
             Hud("You collapse from your injuries!", HUDMessage.error_type);
         }
+        else if ((string?)msg["phase"] == "tend")
+        {
+            // Tending restores HP right away, up to what the body can currently support.
+            int ceiling = Math.Max(10, (int)(Game1.player.maxHealth * Math.Min(1.0, pct)));
+            int heal = 10 + (int)(25 * lastTendQuality);
+            Game1.player.health = Math.Min(Math.Max(Game1.player.health, ceiling), Game1.player.health + heal);
+            Hud($"Wounds tended: +{Game1.player.health - lastHealth} HP.", HUDMessage.achievement_type);
+        }
         else if ((string?)msg["phase"] == "day")
         {
             // Morning after: Stardew's full heal is capped by what RimWorld says the body can recover.
@@ -87,6 +96,7 @@ public partial class ModEntry
         if (Game1.player.Items.ContainsId("(O)351")) { Game1.player.Items.ReduceId("(O)351", 1); quality = 0.8f; }
         else if (Game1.player.Items.ContainsId("(O)771")) { Game1.player.Items.ReduceId("(O)771", 1); quality = 0.35f; }
         else { Monitor.Log("You need a Muscle Remedy (best) or Fiber (rough bandage).", LogLevel.Warn); return; }
+        lastTendQuality = quality;
         Send(new JObject { ["type"] = "tend", ["quality"] = quality });
         Monitor.Log($"Tending wounds (quality {quality}).", LogLevel.Info);
     }
