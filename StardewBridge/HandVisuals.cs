@@ -282,7 +282,9 @@ public partial class ModEntry
     private bool HandCanFight(HandActor a)
     {
         var info = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
-        return info == null || ((string?)info["status"] == "ok" && (double)info["mood"]! > 0.25);
+        // Only a mental break or being downed keeps a hand out of the fight; unhappy hands still fight, just worse (see Fight).
+        string? status = (string?)info?["status"];
+        return status != "mental break" && status != "downed";
     }
 
     /// <summary>Defend the farm: walk into range of the nearest monster and shoot with a gun matched to the hand's
@@ -326,7 +328,9 @@ public partial class ModEntry
             for (int p = 0; p < pellets; p++)
             {
                 float ang = a.Aim + spread + (pellets > 1 ? (float)((Game1.random.NextDouble() - 0.5) * gun.Spread * 2) : 0f);
-                int dmg = (int)(Game1.random.Next(gun.MinDmg, gun.MaxDmg + 1) * (0.5 + skill * 0.07));
+                double mood = (double?)info?["mood"] ?? 0.5;
+                double moodFactor = mood < 0.3 ? 0.7 : 1.0;   // unhappy hands shoot at 70% damage
+                int dmg = (int)(Game1.random.Next(gun.MinDmg, gun.MaxDmg + 1) * (0.5 + skill * 0.07) * moodFactor);
                 SpawnBullet(Game1.getFarm(), gun, muzzle, ang, Math.Max(1, dmg), p == 0);
             }
         }
