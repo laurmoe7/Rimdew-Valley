@@ -57,7 +57,9 @@ public class RimDewMenu : IClickableMenu
     public override void receiveScrollWheelAction(int direction) => scroll = Math.Max(0, scroll + (direction > 0 ? -1 : 1));
 
     // ---------- drawing helpers ----------
-    private Rectangle Content => new(xPositionOnScreen + 40, yPositionOnScreen + 150, width - 80, height - 230);
+    // Layout, top to bottom: title, tab row (+90), action row (+150), content (+210).
+    private int ActionY => yPositionOnScreen + 150;
+    private Rectangle Content => new(xPositionOnScreen + 40, yPositionOnScreen + 210, width - 80, height - 250);
 
     private void Text(SpriteBatch b, string text, int x, int y, Color? color = null, bool big = false) =>
         Utility.drawTextWithShadow(b, text, big ? Game1.dialogueFont : Game1.smallFont, new Vector2(x, y), color ?? Game1.textColor);
@@ -134,7 +136,7 @@ public class RimDewMenu : IClickableMenu
         var list = mod.npcMood.OrderBy(kv => kv.Value).ToList();
         int rows = Math.Max(1, c.Height / 34);
         scroll = Math.Min(scroll, Math.Max(0, list.Count - rows));
-        Text(b, $"Villagers ({list.Count}), lowest mood first. Scroll for more.", c.X, c.Y - 34);
+        Text(b, $"Villagers ({list.Count}), lowest mood first. Scroll for more.", c.X, ActionY + 8);
         for (int i = 0; i < rows && i + scroll < list.Count; i++)
         {
             var (name, mood) = list[i + scroll];
@@ -150,8 +152,8 @@ public class RimDewMenu : IClickableMenu
     private void DrawFarmhands(SpriteBatch b)
     {
         var c = Content;
-        Button(b, new Rectangle(c.X, c.Y - 44, 340, 40), $"Hire a farmhand ({ModEntry.DailyWage}g/day)", mod.HireNext);
-        Text(b, $"{mod.Data.Hands.Count} hired", c.X + 360, c.Y - 36);
+        Button(b, new Rectangle(c.X, ActionY, 340, 40), $"Hire a farmhand ({ModEntry.DailyWage}g/day)", mod.HireNext);
+        Text(b, $"{mod.Data.Hands.Count} hired", c.X + 360, ActionY + 8);
 
         if (mod.Data.Hands.Count == 0)
         {
@@ -194,8 +196,8 @@ public class RimDewMenu : IClickableMenu
     private void DrawResearch(SpriteBatch b)
     {
         var c = Content;
-        Button(b, new Rectangle(c.X, c.Y - 44, 400, 40), $"Gate machine recipes: {(mod.Data.GateRecipes ? "ON" : "off")}", mod.ToggleGate, active: mod.Data.GateRecipes);
-        Text(b, "1 research point per 25g earned", c.X + 420, c.Y - 36);
+        Button(b, new Rectangle(c.X, ActionY, 400, 40), $"Gate machine recipes: {(mod.Data.GateRecipes ? "ON" : "off")}", mod.ToggleGate, active: mod.Data.GateRecipes);
+        Text(b, "1 research point per 25g earned", c.X + 420, ActionY + 8);
 
         if (mod.lastProjects.Count == 0)
         {
@@ -223,7 +225,7 @@ public class RimDewMenu : IClickableMenu
     {
         var c = Content;
         var h = mod.LastHealth;
-        Button(b, new Rectangle(c.X, c.Y - 44, 460, 40), "Tend wounds (Muscle Remedy or Fiber)", mod.Tend);
+        Button(b, new Rectangle(c.X, ActionY, 460, 40), "Tend wounds (Muscle Remedy or Fiber)", mod.Tend);
         if (h == null)
         {
             Text(b, "No health data yet. Get hurt, or sleep a night, with RimWorld running.", c.X, c.Y + 10);
