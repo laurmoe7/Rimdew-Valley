@@ -44,7 +44,9 @@ public partial class ModEntry
         public int PathIdx;
         public bool Unreachable;
         public bool PathPartial;
-        public int RepathTick;     // currently indoors: not drawn, not clickable
+        public int RepathTick;
+        public Vector2 LastPos;
+        public int StuckTicks;     // currently indoors: not drawn, not clickable
         public float Aim;
         public Gun? Weapon;
         public int NextShot, LastShot = -100;
@@ -316,6 +318,12 @@ public partial class ModEntry
             // No clear shot: walk (around terrain) toward the monster until there is one.
             StepTo(a, new Vector2(monsterTile.X * 64, monsterTile.Y * 64), HandSpeed * 1.2f, allowPartial: true);
         }
+
+        // No progress for ~1.5s while out of position: log why, rescue the hand, and if still stuck shoot from here.
+        a.StuckTicks = Vector2.DistanceSquared(a.Pos, a.LastPos) < 0.25f ? a.StuckTicks + 1 : 0;
+        a.LastPos = a.Pos;
+        if (!clear && a.StuckTicks == 90) { LogStuck(a, monsterTile, dist); RescueHand(a); }
+        if (!clear && a.StuckTicks > 150 && dist <= 520) clear = true;
 
         if (clear && Game1.ticks >= a.NextShot)
         {

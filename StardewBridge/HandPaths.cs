@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using StardewModdingAPI;
 using StardewValley;
 
 namespace StardewBridge;
@@ -19,7 +20,7 @@ public partial class ModEntry
         var farm = Game1.getFarm();
         bool ok = t.X >= 0 && t.Y >= 0 && t.X < farm.map.Layers[0].LayerWidth && t.Y < farm.map.Layers[0].LayerHeight
                   && farm.isTilePassable(new xTile.Dimensions.Location(t.X, t.Y), Game1.viewport)
-                  && !farm.isCollidingPosition(new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52), Game1.viewport, true, 0, false, Game1.player);
+                  && !farm.isCollidingPosition(new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52), Game1.viewport, false, 0, false, null, pathfinding: true);
         walkCache[t] = ok;
         return ok;
     }
@@ -111,6 +112,41 @@ public partial class ModEntry
         a.Moving = true;
         a.Dir = Math.Abs(d.X) > Math.Abs(d.Y) ? (d.X > 0 ? 1 : 3) : (d.Y > 0 ? 0 : 2);
         return false;
+    }
+
+    /// <summary>Closest walkable tile to <paramref name="from"/> within <paramref name="radius"/>, searching outward in rings.</summary>
+    private Point? NearestWalkable(Point from, int radius)
+    {
+        for (int r = 0; r <= radius; r++)
+            for (int dx = -r; dx <= r; dx++)
+                for (int dy = -r; dy <= r; dy++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
+                    var p = new Point(from.X + dx, from.Y + dy);
+                    if (Walkable(p)) return p;
+                }
+        return null;
+    }
+
+    /// <summary>Free a hand that has stopped making progress: forget cached terrain and routes, and if it is standing on
+    /// ground it could not walk on (a doorway, a building edge), put it on the nearest walkable tile.</summary>
+    private void RescueHand(HandActor a)
+    {
+        walkCache.Clear();
+        a.PathGoal = NoGoal;
+        a.RepathTick = 0;
+        a.Path = null;
+        var here = ToTile(a.Pos);
+        if (!Walkable(here) && NearestWalkable(here, 6) is { } n) a.Pos = new Vector2(n.X * 64, n.Y * 64);
+    }
+
+    private void LogStuck(HandActor a, Point monsterTile, float dist)
+    {
+        var t = ToTile(a.Pos);
+        string W(Point p) => Walkable(p) ? "open" : "blocked";
+        Monitor.Log($"[stuck] {a.Name} at tile {t.X},{t.Y} ({W(t)}); neighbours N {W(new Point(t.X, t.Y - 1))}, E {W(new Point(t.X + 1, t.Y))}, " +
+                    $"S {W(new Point(t.X, t.Y + 1))}, W {W(new Point(t.X - 1, t.Y))}; target tile {monsterTile.X},{monsterTile.Y}, dist {dist:0}; " +
+                    $"path {(a.Path == null ? "none" : a.Path.Count.ToString())}{(a.PathPartial ? " (partial)" : "")}, unreachable {a.Unreachable}", LogLevel.Info);
     }
 
     /// <summary>True if every tile between the two (exclusive) is open ground, i.e. a bullet would not hit terrain first.</summary>
