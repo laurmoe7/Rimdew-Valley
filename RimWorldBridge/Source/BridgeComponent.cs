@@ -103,6 +103,14 @@ namespace RimDewBridge
                 case "priority": handPriority[m.Str("name") + "|" + m.Str("task")] = (int)m.Num("value"); break;
                 case "research_set": researchTarget = m.Str("id"); break;
                 case "day_end": BeginDay(m); break;
+                // --- test tools (Stardew menu > Test tab) ---
+                case "report":
+                    Send(new Dictionary<string, object> { { "type", "npc_state" }, { "apply", false }, { "npcs", NpcReport() } });
+                    SendHealth();
+                    SendResearch();
+                    break;
+                case "research_points": ApplyResearch(m.Num("amount")); SendResearch(); break;
+                case "dev_incident": FireIncident(m.Str("def")); break;
             }
         }
 
@@ -350,6 +358,16 @@ namespace RimDewBridge
                 { "progress", Math.Round(d.ProgressReal, 0) }, { "cost", d.baseCost }, { "done", d.IsFinished }
             }).ToList();
             Send(new Dictionary<string, object> { { "type", "research_state" }, { "projects", list }, { "target", researchTarget } });
+        }
+
+        private void FireIncident(string defName)
+        {
+            var def = DefDatabase<IncidentDef>.GetNamedSilentFail(defName);
+            var map = Find.AnyPlayerHomeMap;
+            if (def == null || map == null) { Log.Warning("[RimDew] Cannot fire incident " + defName); return; }
+            var parms = StorytellerUtility.DefaultParmsNow(def.category, map);
+            parms.forced = true;
+            def.Worker.TryExecute(parms); // our wrapper forwards it to Stardew
         }
 
         // ---- storyteller threat scale (wealth from Stardew) ----

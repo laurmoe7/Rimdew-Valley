@@ -29,8 +29,9 @@ public partial class ModEntry
             Game1.player.Stamina = Math.Max(0, Game1.player.Stamina - (float)(bleed * 4));
     }
 
-    private static string GuessDamageKind()
+    private string GuessDamageKind()
     {
+        if (forcedHurtKind != null) { var k = forcedHurtKind; forcedHurtKind = null; return k; }
         var m = Game1.currentLocation.characters.OfType<Monster>()
             .OrderBy(x => Vector2Distance(x.Tile, Game1.player.Tile)).FirstOrDefault();
         if (m == null) return "blunt";

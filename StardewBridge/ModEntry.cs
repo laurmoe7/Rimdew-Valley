@@ -87,6 +87,12 @@ public partial class ModEntry : Mod
 
     private void OnDayEnding()
     {
+        SendDayEnd();
+        TrampleCrops(Game1.getFarm());
+    }
+
+    private void SendDayEnd()
+    {
         var farm = Game1.getFarm();
         bool paid = PayHands();
         long earned = Game1.player.totalMoneyEarned;
@@ -104,7 +110,6 @@ public partial class ModEntry : Mod
             ["research_points"] = gained / 25,
             ["backlog"] = BuildBacklog(farm)
         });
-        TrampleCrops(farm);
     }
 
     private static string CurrentWeather()

@@ -10,7 +10,7 @@ namespace StardewBridge;
 /// <summary>In-game control panel (F8). Immediate-mode: every frame draw() rebuilds the clickable regions.</summary>
 public class RimDewMenu : IClickableMenu
 {
-    private static readonly string[] Tabs = { "Villagers", "Farmhands", "Research", "Health" };
+    private static readonly string[] Tabs = { "Villagers", "Farmhands", "Research", "Health", "Test" };
     private static readonly string[] Tasks = { "water", "harvest", "animals" };
     private static readonly Dictionary<string, string> TaskLabel = new() { ["water"] = "Water", ["harvest"] = "Harvest", ["animals"] = "Animals" };
 
@@ -107,9 +107,9 @@ public class RimDewMenu : IClickableMenu
         for (int i = 0; i < Tabs.Length; i++)
         {
             int idx = i;
-            var r = new Rectangle(tx, yPositionOnScreen + 90, 190, 48);
+            var r = new Rectangle(tx, yPositionOnScreen + 90, 160, 48);
             Button(b, r, Tabs[i], () => { tab = idx; scroll = 0; }, active: tab == i);
-            tx += 200;
+            tx += 170;
         }
 
         switch (tab)
@@ -118,6 +118,7 @@ public class RimDewMenu : IClickableMenu
             case 1: DrawFarmhands(b); break;
             case 2: DrawResearch(b); break;
             case 3: DrawHealth(b); break;
+            case 4: DrawTest(b); break;
         }
 
         upperRightCloseButton?.draw(b);
@@ -250,5 +251,43 @@ public class RimDewMenu : IClickableMenu
         var injuries = ((JArray)h["injuries"]!).Select(x => (string)x!).ToList();
         if (injuries.Count == 0) Text(b, "None", c.X + 20, c.Y + 222, Color.ForestGreen);
         for (int i = 0; i < injuries.Count; i++) Text(b, "- " + Fit(injuries[i], c.Width - 40), c.X + 20, c.Y + 222 + i * 30);
+    }
+
+    private void DrawTest(SpriteBatch b)
+    {
+        var c = Content;
+        Text(b, "Test tools. Nothing is saved until you sleep, so quit without sleeping to undo.", c.X, ActionY + 8, Color.Gray);
+
+        var sections = new (string title, (string label, Action act)[] buttons)[]
+        {
+            ("Farm", new (string, Action)[] { ("Clear weeds/rocks", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
+                ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit) }),
+            ("Monsters (local)", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
+                ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")) }),
+            ("Injury (-15 HP)", new (string, Action)[] { ("Hurt: blunt", () => mod.HurtMe("blunt", 15)), ("Hurt: bite", () => mod.HurtMe("bite", 15)),
+                ("Hurt: cut", () => mod.HurtMe("cut", 15)), ("Tend wounds", mod.Tend) }),
+            ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
+                ("Cheer everyone", () => mod.SendMoodEventToAll("festival")), ("Upset everyone", () => mod.SendMoodEventToAll("gift_hated")),
+                ("+200 research", () => mod.AddResearchPoints(200)) }),
+            ("Storyteller (real incidents)", new (string, Action)[] { ("Raid", () => mod.FireRimWorldIncident("RaidEnemy")),
+                ("Infestation", () => mod.FireRimWorldIncident("Infestation")), ("Toxic fallout", () => mod.FireRimWorldIncident("ToxicFallout")),
+                ("Cold snap", () => mod.FireRimWorldIncident("ColdSnap")) }),
+        };
+
+        const int cols = 4, gap = 10, bh = 40;
+        int bw = (c.Width - gap * (cols - 1)) / cols;
+        int y = c.Y;
+        foreach (var (title, buttons) in sections)
+        {
+            Text(b, title, c.X, y);
+            y += 28;
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                int col = i % cols, row = i / cols;
+                var (label, act) = buttons[i];
+                Button(b, new Rectangle(c.X + col * (bw + gap), y + row * (bh + 6), bw, bh), label, act);
+            }
+            y += (buttons.Length + cols - 1) / cols * (bh + 6) + 6;
+        }
     }
 }

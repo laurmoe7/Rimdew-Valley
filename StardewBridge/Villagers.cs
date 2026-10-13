@@ -77,6 +77,7 @@ public partial class ModEntry
                 npcBroken.Add(name);
                 Hud($"{name} is having a {(string)n["label"]!}.", HUDMessage.error_type);
             }
+            if (msg["apply"] is JValue { Type: JTokenType.Boolean } a && !(bool)a) continue;
             // Mood moves friendship once per day: happy villagers warm to you, unhappy ones drift away.
             if (Game1.player.friendshipData.ContainsKey(name))
             {
