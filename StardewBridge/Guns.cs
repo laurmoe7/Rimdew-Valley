@@ -237,8 +237,8 @@ public partial class ModEntry
     /// (0 up, 1 right, 2 down, 3 left).</summary>
     private static Vector2 HandPosFor(Vector2 feet, int facing, bool posed = false) => feet + facing switch
     {
-        1 => posed ? new Vector2(22, -46) : new Vector2(12, -22),   // posed: farmer sheet frame 89, arm straight out
-        3 => posed ? new Vector2(-22, -46) : new Vector2(-12, -22),
+        1 => posed ? new Vector2(16, -34) : new Vector2(12, -22),   // posed: farmer sheet frame 89, arm straight out
+        3 => posed ? new Vector2(-16, -34) : new Vector2(-12, -22),
         2 => new Vector2(12, -14),
         _ => new Vector2(-12, -24)
     };
@@ -362,6 +362,7 @@ public partial class ModEntry
         int face = Game1.player.FacingDirection;
         playerPosed = (face == 1 || face == 3) && !Game1.player.isMoving() && Game1.player.CanMove && !Game1.player.UsingTool;
         if (playerPosed) Game1.player.FarmerSprite.setCurrentSingleFrame(AimPoseFrame, 32000, false, face == 3);
+        Game1.player.mostRecentlyGrabbedItem = null;   // the carry pose would otherwise draw the held item above the head
 
         // Hold left click to keep firing at the gun's own fire rate.
         if (!leftDown || e.Ticks < nextShotTick) return;
@@ -414,13 +415,5 @@ public partial class ModEntry
         b.Draw(tex, Game1.GlobalToLocal(Game1.viewport, hand), null, Color.White,
             left ? angle + (float)Math.PI : angle, origin, scale,
             left ? SpriteEffects.FlipHorizontally : SpriteEffects.None, depth);
-
-        // A small fist over the grip so the gun reads as held.
-        if (facing != 0)
-        {
-            var local = Game1.GlobalToLocal(Game1.viewport, hand);
-            b.Draw(Game1.staminaRect, new Rectangle((int)local.X - 5, (int)local.Y - 5, 10, 10), null, new Color(232, 176, 136), 0f,
-                Vector2.Zero, SpriteEffects.None, depth + 0.0002f);
-        }
     }
 }
