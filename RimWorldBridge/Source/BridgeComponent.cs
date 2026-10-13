@@ -47,6 +47,8 @@ namespace RimDewBridge
             Application.runInBackground = true;
             Prefs.RunInBackground = true;
             // Background-sim mode: Stardew is the game being played, so keep RimWorld silent and light.
+            // Stardew's OpenAL crashes when RimWorld's audio is live at the same time, so stop RimWorld's audio engine.
+            AudioListener.pause = true;
             AudioListener.volume = 0f;
             QualitySettings.vSyncCount = 0;
             Application.targetFrameRate = 20;
@@ -57,6 +59,7 @@ namespace RimDewBridge
         public override void GameComponentUpdate()
         {
             if (hub == null) return;
+            if (!AudioListener.pause) AudioListener.pause = true; // the game un-pauses audio on window focus changes
             if (Find.TickManager.CurTimeSpeed != TimeSpeed.Paused) Find.TickManager.CurTimeSpeed = TimeSpeed.Paused;
 
             Dictionary<string, object> m;
