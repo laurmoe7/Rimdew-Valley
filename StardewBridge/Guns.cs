@@ -19,7 +19,7 @@ public partial class ModEntry
     private const string IconAsset = "Mods/laurm.StardewBridge/GunIcons";
 
     private record Gun(string Id, string Name, string Sprite, int MinDmg, int MaxDmg, int Cooldown, bool Auto,
-                       int Pellets = 1, float Spread = 0f, float Speed = 18f);
+                       int Pellets = 1, float Spread = 0f, float Speed = 18f, string Bullet = "Bullet_Small");
 
     private static readonly Gun[] Guns =
     {
@@ -27,16 +27,17 @@ public partial class ModEntry
         new("Autopistol",      "Autopistol",       "Autopistol",       9, 13, 11, true,  Spread: 0.06f),
         new("MachinePistol",   "Machine Pistol",   "MachinePistol",    6,  9,  6, true,  Spread: 0.10f),
         new("AssaultRifle",    "Assault Rifle",    "AssaultRifle",    13, 18,  9, true,  Spread: 0.05f),
-        new("BoltActionRifle", "Bolt-Action Rifle","BoltActionRifle", 45, 60, 55, false, Speed: 24f),
-        new("SniperRifle",     "Sniper Rifle",     "SniperRifle",     85,110, 95, false, Speed: 30f),
-        new("Shotgun",         "Pump Shotgun",     "Shotgun",          9, 13, 55, false, Pellets: 6, Spread: 0.22f, Speed: 15f),
-        new("ChainShotgun",    "Chain Shotgun",    "ChainShotgun",     8, 12, 30, false, Pellets: 5, Spread: 0.24f, Speed: 15f),
+        new("BoltActionRifle", "Bolt-Action Rifle","BoltActionRifle", 45, 60, 55, false, Speed: 24f, Bullet: "Bullet_Big"),
+        new("SniperRifle",     "Sniper Rifle",     "SniperRifle",     85,110, 95, false, Speed: 30f, Bullet: "Bullet_Big"),
+        new("Shotgun",         "Pump Shotgun",     "Shotgun",          9, 13, 55, false, Pellets: 6, Spread: 0.22f, Speed: 15f, Bullet: "Bullet_Shotgun"),
+        new("ChainShotgun",    "Chain Shotgun",    "ChainShotgun",     8, 12, 30, false, Pellets: 5, Spread: 0.24f, Speed: 15f, Bullet: "Bullet_Shotgun"),
         new("Minigun",         "Minigun",          "Minigun",          7, 10,  3, true,  Spread: 0.14f),
     };
 
     private readonly Dictionary<string, Texture2D> gunSprites = new(); // cropped, full resolution (held in hand)
     private Texture2D? gunIconSheet;
     private int nextShotTick;
+    private bool leftWasDown;
     private int lastShotTick = -100;
 
     // ---------- content: item definitions + inventory icons ----------
@@ -90,19 +91,23 @@ public partial class ModEntry
             e.LoadFrom(() => BuildIconSheet(), AssetLoadPriority.Exclusive);
     }
 
-    private Texture2D? LoadGunSprite(Gun g)
+    private Texture2D? LoadGunSprite(Gun g) => LoadSprite(g.Id, g.Sprite);
+
+    private Texture2D? LoadBulletSprite(Gun g) => LoadSprite("bullet:" + g.Bullet, g.Bullet);
+
+    /// <summary>Load assets/guns/NAME.png, trim its padding, and cache it.</summary>
+    private Texture2D? LoadSprite(string key, string file)
     {
-        if (gunSprites.TryGetValue(g.Id, out var cached)) return cached;
+        if (gunSprites.TryGetValue(key, out var cached)) return cached;
         try
         {
-            var raw = Helper.ModContent.Load<Texture2D>($"assets/guns/{g.Sprite}.png");
-            var cropped = CropToContent(raw);
-            gunSprites[g.Id] = cropped;
+            var cropped = CropToContent(Helper.ModContent.Load<Texture2D>($"assets/guns/{file}.png"));
+            gunSprites[key] = cropped;
             return cropped;
         }
         catch (Exception ex)
         {
-            Monitor.Log($"Gun sprite '{g.Sprite}' missing ({ex.Message}). Export RimWorld sprites to Mods/StardewBridge/assets/guns.", LogLevel.Warn);
+            Monitor.Log($"Sprite '{file}' missing ({ex.Message}). Export RimWorld sprites to Mods/StardewBridge/assets/guns.", LogLevel.Warn);
             return null;
         }
     }
@@ -214,11 +219,44 @@ public partial class ModEntry
 
     private Vector2 Muzzle(float angle) => HandPos() + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * 40f;
 
-    private static void SpawnBullet(GameLocation where, Gun gun, Vector2 muzzle, float angle, int dmg, bool withSound)
+    /// <summary>A normal damaging projectile that is drawn as a RimWorld bullet: a tracer rotated along its flight
+    /// path with a short fading trail.</summary>
+    private class GunBullet : BasicProjectile
     {
-        var proj = new BasicProjectile(dmg, 12, 0, 0, 0f, (float)Math.Cos(angle) * gun.Speed, (float)Math.Sin(angle) * gun.Speed,
-            muzzle, "hitEnemy", "", withSound ? "slingshot" : "", false, true, where, Game1.player, shotItemId: "(O)382");
-        where.projectiles.Add(proj);
+        private readonly Texture2D? sprite;
+        private readonly float length;
+
+        public GunBullet(Texture2D? sprite, float length, int damage, float vx, float vy, Vector2 start, string fireSound, GameLocation where)
+            : base(damage, 12, 0, 0, 0f, vx, vy, start, "hitEnemy", "", fireSound, false, true, where, Game1.player, shotItemId: "(O)382")
+        {
+            this.sprite = sprite;
+            this.length = length;
+        }
+
+        public override void draw(SpriteBatch b)
+        {
+            if (sprite == null) { base.draw(b); return; }
+            var vel = new Vector2(xVelocity.Value, yVelocity.Value);
+            if (vel == Vector2.Zero) return;
+            float angle = (float)Math.Atan2(vel.Y, vel.X) + MathHelper.PiOver2;   // RimWorld bullet art points up
+            var dir = Vector2.Normalize(vel);
+            float scale = length / Math.Max(sprite.Width, sprite.Height);
+            var origin = new Vector2(sprite.Width / 2f, sprite.Height / 2f);
+            for (int i = 0; i < 4; i++)   // head + three fading trail copies
+            {
+                var world = position.Value + new Vector2(32, 32) - dir * (i * length * 0.55f);
+                b.Draw(sprite, Game1.GlobalToLocal(Game1.viewport, world), null, Color.White * (1f - i * 0.28f), angle, origin,
+                    scale * (1f - i * 0.12f), SpriteEffects.None, (position.Y + 64f) / 10000f);
+            }
+        }
+    }
+
+    private void SpawnBullet(GameLocation where, Gun gun, Vector2 muzzle, float angle, int dmg, bool withSound)
+    {
+        var sprite = LoadBulletSprite(gun);
+        float length = gun.Bullet == "Bullet_Big" ? 44f : gun.Bullet == "Bullet_Shotgun" ? 24f : 32f;
+        where.projectiles.Add(new GunBullet(sprite, length, dmg, (float)Math.Cos(angle) * gun.Speed, (float)Math.Sin(angle) * gun.Speed,
+            muzzle, withSound ? "slingshot" : "", where));
     }
 
     /// <summary>Better shooters get better guns.</summary>
@@ -254,15 +292,19 @@ public partial class ModEntry
         }
         else toolLockTicks = 0;
 
+        // Raw mouse state: the swing block above suppresses the button for the game, so don't depend on SMAPI's view of it.
+        bool leftDown = Game1.input.GetMouseState().LeftButton == Microsoft.Xna.Framework.Input.ButtonState.Pressed;
+        bool freshPress = leftDown && !leftWasDown;
+        leftWasDown = leftDown;
+
         var gun = HeldGun();
         if (gun == null) return;
         float angle = AimAngle();
         // Turn the farmer toward the aim point.
         Game1.player.faceDirection(Math.Abs(Math.Cos(angle)) > Math.Abs(Math.Sin(angle)) ? (Math.Cos(angle) > 0 ? 1 : 3) : (Math.Sin(angle) > 0 ? 2 : 0));
 
-        var state = Helper.Input.GetState(SButton.MouseLeft);
-        bool wantsFire = gun.Auto ? state is SButtonState.Pressed or SButtonState.Held : state == SButtonState.Pressed;
-        if (!wantsFire || e.Ticks < nextShotTick) return;
+        // Hold left click to keep firing at the gun's own fire rate.
+        if (!leftDown || e.Ticks < nextShotTick) return;
         nextShotTick = (int)e.Ticks + gun.Cooldown;
         lastShotTick = (int)e.Ticks;
 
