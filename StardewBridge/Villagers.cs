@@ -90,6 +90,7 @@ public partial class ModEntry
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
     {
         if (!Context.IsWorldReady) return;
+        SuppressSwing(e);
         if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && Game1.currentLocation is Farm
             && HandAt(e.Cursor.AbsolutePixels) != null)
         {

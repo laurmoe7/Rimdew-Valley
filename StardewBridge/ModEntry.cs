@@ -43,6 +43,8 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
         helper.Events.Display.RenderedWorld += OnRenderedWorld;
+        helper.Events.Display.RenderedWorld += DrawHeldGun;
+        helper.Events.Content.AssetRequested += OnAssetRequested;
         helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
         RegisterCommands();
@@ -137,6 +139,7 @@ public partial class ModEntry : Mod
 
         TickVillagers(e);
         TickHands();
+        TickGuns(e);
         TickHealth(e);
 
         if (!e.IsMultipleOf(30)) return;
