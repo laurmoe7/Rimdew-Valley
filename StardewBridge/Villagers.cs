@@ -89,7 +89,15 @@ public partial class ModEntry
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
     {
-        if (!Context.IsWorldReady || !e.Button.IsActionButton() || npcBroken.Count == 0) return;
+        if (!Context.IsWorldReady) return;
+        if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && Game1.currentLocation is Farm
+            && HandAt(e.Cursor.AbsolutePixels) != null)
+        {
+            Helper.Input.Suppress(e.Button);
+            Game1.activeClickableMenu = new RimDewMenu(this, 1);
+            return;
+        }
+        if (!e.Button.IsActionButton() || npcBroken.Count == 0) return;
         var npc = Game1.currentLocation.isCharacterAtTile(e.Cursor.GrabTile) as NPC
                   ?? Game1.currentLocation.isCharacterAtTile(e.Cursor.Tile) as NPC;
         if (npc != null && npcBroken.Contains(npc.Name))

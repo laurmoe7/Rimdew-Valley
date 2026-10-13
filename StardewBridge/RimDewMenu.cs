@@ -19,10 +19,11 @@ public class RimDewMenu : IClickableMenu
     private int tab;
     private int scroll;
 
-    public RimDewMenu(ModEntry mod)
+    public RimDewMenu(ModEntry mod, int startTab = 0)
         : base(0, 0, 1000, 720, showUpperRightCloseButton: true)
     {
         this.mod = mod;
+        tab = startTab;
         Reposition();
     }
 

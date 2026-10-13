@@ -20,6 +20,7 @@ public partial class ModEntry
         {
             if (!Ready() || a.Length < 1) return;
             if (!data.Hands.Contains(a[0])) data.Hands.Add(a[0]);
+            SyncHands(false);
             Send(new JObject { ["type"] = "hire", ["name"] = a[0] });
             Monitor.Log($"Hired {a[0]}. Wages: {DailyWage}g/day.", LogLevel.Info);
         });
@@ -28,6 +29,7 @@ public partial class ModEntry
             if (!Ready() || a.Length < 1) return;
             data.Hands.Remove(a[0]);
             Send(new JObject { ["type"] = "fire", ["name"] = a[0] });
+            SyncHands(false);
         });
         c.Add("rd_priority", "Set a hand's chore priority 0 (off) to 4. rd_priority <name> <water|harvest|animals> <0-4>", (_, a) =>
         {
@@ -78,12 +80,14 @@ public partial class ModEntry
         string name = HandNames.FirstOrDefault(n => !data.Hands.Contains(n)) ?? "Hand" + (data.Hands.Count + 1);
         data.Hands.Add(name);
         Send(new JObject { ["type"] = "hire", ["name"] = name });
+        SyncHands(false);
     }
 
     internal void FireHand(string name)
     {
         data.Hands.Remove(name);
         Send(new JObject { ["type"] = "fire", ["name"] = name });
+        SyncHands(false);
     }
 
     internal void SetResearchTarget(string id)

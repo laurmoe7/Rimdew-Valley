@@ -317,17 +317,19 @@ namespace RimDewBridge
                     .Select((t, i) => new { t, pr = Prio(name, t, i + 1) })
                     .Where(x => x.pr > 0).OrderBy(x => x.pr).Select(x => x.t);
                 double workedHours = 0;
+                var mine = new Dictionary<string, double> { { "water", 0 }, { "harvest", 0 }, { "animals", 0 } };
                 foreach (var task in order)
                 {
                     if (hours <= 0 || remaining[task] <= 0) continue;
                     double h = Math.Min(hours, remaining[task] / rate[task]);
                     double n = Math.Min(remaining[task], h * rate[task]);
-                    done[task] += n; remaining[task] -= n; hours -= h; workedHours += h;
+                    done[task] += n; mine[task] += n; remaining[task] -= n; hours -= h; workedHours += h;
                 }
                 hands.Add(new Dictionary<string, object>
                 {
                     { "name", name }, { "mood", Math.Round(mood, 2) }, { "plants", plants }, { "animals", animals },
                     { "hours", Math.Round(workedHours, 1) },
+                    { "water", (int)mine["water"] }, { "harvest", (int)mine["harvest"] }, { "animals", (int)mine["animals"] },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
                 });
             }

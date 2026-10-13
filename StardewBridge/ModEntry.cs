@@ -42,6 +42,7 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.DayEnding += (_, _) => OnDayEnding();
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
+        helper.Events.Display.RenderedWorld += OnRenderedWorld;
         helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
         RegisterCommands();
@@ -55,6 +56,7 @@ public partial class ModEntry : Mod
         lastHealth = Game1.player.health;
         SendRoster();
         ApplyRecipeGating();
+        SyncHands(true);
     }
 
     /// <summary>Tell RimWorld who exists. Sent on load and whenever RimWorld (re)connects.</summary>
@@ -80,6 +82,7 @@ public partial class ModEntry : Mod
             ["season"] = Game1.currentSeason,
             ["year"] = Game1.year
         });
+        SyncHands(true);
         SendDayStartNpcEvents();
         ReportTrampling();
         ApplyRecipeGating();
@@ -87,6 +90,7 @@ public partial class ModEntry : Mod
 
     private void OnDayEnding()
     {
+        FlushHands(); // finish any chores still in progress
         SendDayEnd();
         TrampleCrops(Game1.getFarm());
     }
@@ -132,6 +136,7 @@ public partial class ModEntry : Mod
         if (!Context.IsWorldReady) return;
 
         TickVillagers(e);
+        TickHands();
         TickHealth(e);
 
         if (!e.IsMultipleOf(30)) return;
