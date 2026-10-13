@@ -42,7 +42,9 @@ public partial class ModEntry
         public List<Vector2>? Path;
         public Point PathGoal = new(-99999, -99999);
         public int PathIdx;
-        public bool Unreachable;     // currently indoors: not drawn, not clickable
+        public bool Unreachable;
+        public bool PathPartial;
+        public int RepathTick;     // currently indoors: not drawn, not clickable
         public float Aim;
         public Gun? Weapon;
         public int NextShot, LastShot = -100;
@@ -312,8 +314,7 @@ public partial class ModEntry
         else
         {
             // No clear shot: walk (around terrain) toward the monster until there is one.
-            StepTo(a, new Vector2(monsterTile.X * 64, monsterTile.Y * 64), HandSpeed * 1.2f);
-            if (a.Unreachable) { a.Unreachable = false; a.PathGoal = new Point(-99999, -99999); a.Moving = false; }
+            StepTo(a, new Vector2(monsterTile.X * 64, monsterTile.Y * 64), HandSpeed * 1.2f, allowPartial: true);
         }
 
         if (clear && Game1.ticks >= a.NextShot)
@@ -356,7 +357,8 @@ public partial class ModEntry
     private void TryNudge(HandActor a, Vector2 by)
     {
         var np = a.Pos + by;
-        if (Walkable(ToTile(np))) a.Pos = np;
+        var t = ToTile(np);
+        if (t == ToTile(a.Pos) || Walkable(t)) a.Pos = np;
     }
 
     private readonly List<(int tick, int count, string kind)> pendingSpawns = new();
@@ -387,7 +389,7 @@ public partial class ModEntry
             {
                 if (!busy && !fighting) { a.Moving = false; a.Activity = "inside"; continue; }
                 a.Inside = false;                         // step out of the door
-                if (a.Door.HasValue) a.Pos = a.Door.Value;
+                if (a.Door.HasValue) a.Pos = a.Door.Value + new Vector2(0, 8);
             }
             if (fighting) { Fight(a, monsters); continue; }
 

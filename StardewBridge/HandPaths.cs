@@ -25,8 +25,9 @@ public partial class ModEntry
     }
 
     /// <summary>Tiles to walk through (world px, top-left), excluding the start tile. Empty = already there; null = no route.</summary>
-    private List<Vector2>? FindPath(Point start, Point goal)
+    private List<Vector2>? FindPath(Point start, Point goal, bool allowPartial, out bool partial)
     {
+        partial = false;
         if (start == goal) return new List<Vector2>();
         const int pad = 30, maxNodes = 4000;
         int minX = Math.Min(start.X, goal.X) - pad, maxX = Math.Max(start.X, goal.X) + pad;
@@ -38,10 +39,14 @@ public partial class ModEntry
         open.Enqueue(start, 0);
         var dirs = new[] { new Point(1, 0), new Point(-1, 0), new Point(0, 1), new Point(0, -1) };
 
+        var best = start;
+        int bestDist = Math.Abs(goal.X - start.X) + Math.Abs(goal.Y - start.Y);
         int visited = 0;
         while (open.Count > 0 && visited++ < maxNodes)
         {
             var cur = open.Dequeue();
+            int curDist = Math.Abs(goal.X - cur.X) + Math.Abs(goal.Y - cur.Y);
+            if (curDist < bestDist) { bestDist = curDist; best = cur; }
             if (cur == goal)
             {
                 var path = new List<Vector2>();
@@ -61,24 +66,37 @@ public partial class ModEntry
                 open.Enqueue(n, c + Math.Abs(goal.X - n.X) + Math.Abs(goal.Y - n.Y));
             }
         }
+
+        // Goal not reachable (a bat over a cliff, a monster behind water...): walk as close as the terrain allows.
+        if (allowPartial && best != start)
+        {
+            partial = true;
+            var path = new List<Vector2>();
+            for (var p = best; p != start; p = from[p]) path.Add(new Vector2(p.X * 64, p.Y * 64));
+            path.Reverse();
+            return path;
+        }
         return null;
     }
 
     /// <summary>Walk a hand toward a pixel goal along a real path. Returns true on arrival. If no route exists,
     /// sets <c>Unreachable</c> and does not move (so they never clip through terrain).</summary>
-    private bool StepTo(HandActor a, Vector2 goalPx, float speed)
+    private bool StepTo(HandActor a, Vector2 goalPx, float speed, bool allowPartial = false)
     {
         var goalTile = ToTile(goalPx);
-        if (goalTile != a.PathGoal)
+        if (goalTile != a.PathGoal && Game1.ticks >= a.RepathTick)
         {
-            a.Path = FindPath(ToTile(a.Pos), goalTile);
+            a.Path = FindPath(ToTile(a.Pos), goalTile, allowPartial, out bool partial);
+            a.PathPartial = partial;
             a.PathGoal = goalTile;
             a.PathIdx = 0;
             a.Unreachable = a.Path == null;
+            if (a.Path == null) a.RepathTick = (int)Game1.ticks + 45;   // don't search again every frame
         }
         if (a.Unreachable) { a.Moving = false; return false; }
 
         bool onPath = a.Path != null && a.PathIdx < a.Path.Count;
+        if (!onPath && a.PathPartial) { a.Moving = false; return false; }   // as close as terrain allows: stop, never cut across
         var next = onPath ? a.Path![a.PathIdx] : goalPx;
         var d = next - a.Pos;
         float dist = d.Length();
