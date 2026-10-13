@@ -62,6 +62,16 @@ public partial class ModEntry
         Hud("Test kit: 2000g, 20 parsnip seeds, 3 Muscle Remedy, 5 Fiber.", HUDMessage.achievement_type);
     }
 
+    /// <summary>Vanilla Stardew has no guns; the Galaxy Slingshot is the strongest ranged weapon. Plus ammo and a sword.</summary>
+    internal void GiveWeaponsKit()
+    {
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(W)34"));          // Galaxy Slingshot
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)390", 200));    // stone (basic ammo)
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)380", 100));    // iron ore (stronger ammo)
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(W)4"));           // Galaxy Sword
+        Hud("Weapons kit: Galaxy Slingshot, 200 stone, 100 iron ore, Galaxy Sword.", HUDMessage.achievement_type);
+    }
+
     /// <summary>Lose HP so the hit is reported to RimWorld as the given damage type.</summary>
     internal void HurtMe(string kind, int hp)
     {

@@ -54,6 +54,7 @@ public partial class ModEntry
             ApplyRecipeGating();
             Monitor.Log($"Recipe gating {(data.GateRecipes ? "ON" : "off")}.", LogLevel.Info);
         });
+        c.Add("rd_gun", "Give a slingshot, ammo and a sword for testing raids.", (_, _) => { if (Ready()) GiveWeaponsKit(); });
         c.Add("rd_menu", "Open the RimDew menu (also F8).", (_, _) => OpenMenu());
         c.Add("rd_moods", "Show villager moods reported by RimWorld.", (_, _) =>
         {

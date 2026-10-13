@@ -84,8 +84,28 @@ public partial class ModEntry
         }
     }
 
-    private static readonly int[] HairStyles = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24 };
-    private static readonly string[] HatIds = { "(H)17", "(H)14", "(H)5", "(H)3", "(H)10" };
+    private static readonly int[] HairStyles = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
+
+    // Natural hair colors only.
+    private static readonly Color[] HairColors =
+    {
+        new(30, 25, 25), new(70, 45, 30), new(110, 70, 40), new(140, 85, 45), new(120, 50, 30),
+        new(210, 175, 100), new(230, 205, 140), new(170, 70, 40), new(150, 150, 150)
+    };
+
+    // (shirt, pants) pairs that look like one outfit.
+    private static readonly (Color shirt, Color pants)[] Outfits =
+    {
+        (new Color(190, 160, 110), new Color(60, 80, 120)),   // tan + denim
+        (new Color(170, 60, 50),   new Color(80, 60, 45)),    // red + brown
+        (new Color(80, 130, 80),   new Color(160, 140, 100)), // green + khaki
+        (new Color(70, 110, 170),  new Color(45, 60, 95)),    // blue + dark denim
+        (new Color(225, 215, 190), new Color(95, 70, 50)),    // cream + brown
+        (new Color(110, 130, 150), new Color(60, 60, 65)),    // gray-blue + charcoal
+        (new Color(200, 160, 60),  new Color(45, 55, 90)),    // mustard + navy
+    };
+
+    private static readonly string[] HatNames = { "Straw Hat", "Bucket Hat", "Cowboy Hat" };
 
     /// <summary>Same name => same look, on every launch (string.GetHashCode isn't stable, so hash by hand).</summary>
     private static int StableSeed(string s)
@@ -102,17 +122,24 @@ public partial class ModEntry
             var rng = new Random(StableSeed(name));
             bool male = rng.Next(2) == 0;
             var f = new Farmer(new FarmerSprite("Characters/Farmer/farmer_base"), Vector2.Zero, 1, name, new List<Item>(), male);
-            f.skin.Value = rng.Next(0, 6);
+            f.skin.Value = rng.Next(0, 4);
             f.hair.Value = HairStyles[rng.Next(HairStyles.Length)];
-            f.hairstyleColor.Value = new Color(rng.Next(20, 230), rng.Next(10, 180), rng.Next(0, 130));
-            f.pantsColor.Value = new Color(rng.Next(30, 200), rng.Next(30, 200), rng.Next(30, 200));
-            var shirts = Helper.GameContent.Load<Dictionary<string, ShirtData>>("Data/Shirts").Keys.ToList();
-            if (shirts.Count > 0) f.changeShirt(shirts[rng.Next(shirts.Count)]);
-            if (rng.Next(3) > 0)
+            f.hairstyleColor.Value = HairColors[rng.Next(HairColors.Length)];
+
+            var outfit = Outfits[rng.Next(Outfits.Length)];
+            f.pantsColor.Value = outfit.pants;
+
+            // Plain shirts only: prefer dyeable ones and tint them to the outfit colour.
+            var shirtData = Helper.GameContent.Load<Dictionary<string, ShirtData>>("Data/Shirts");
+            var plain = shirtData.Where(kv => kv.Value.CanBeDyed).Select(kv => kv.Key).ToList();
+            if (plain.Count == 0) plain = shirtData.Where(kv => kv.Value.CanChooseDuringCharacterCustomization).Select(kv => kv.Key).ToList();
+            if (plain.Count > 0)
             {
-                var hat = ItemRegistry.Create(HatIds[rng.Next(HatIds.Length)], 1, allowNull: true) as Hat;
-                if (hat != null) f.hat.Value = hat;
+                f.changeShirt(plain[rng.Next(plain.Count)]);
+                if (f.shirtItem.Value != null) f.shirtItem.Value.clothesColor.Value = outfit.shirt;
             }
+
+            if (rng.Next(2) == 0) f.hat.Value = FindHat(HatNames[rng.Next(HatNames.Length)]);
             f.FarmerRenderer.MarkSpriteDirty();
             return f;
         }
@@ -121,6 +148,18 @@ public partial class ModEntry
             Monitor.Log($"Could not build a farmer body for hand '{name}' ({e.Message}); using a villager sprite.", LogLevel.Warn);
             return null;
         }
+    }
+
+    /// <summary>Look a hat up by display name instead of guessing its id.</summary>
+    private Hat? FindHat(string wanted)
+    {
+        try
+        {
+            var hats = Helper.GameContent.Load<Dictionary<string, string>>("Data/Hats");
+            var entry = hats.FirstOrDefault(kv => kv.Value.Split('/')[0] == wanted);
+            return entry.Key == null ? null : ItemRegistry.Create("(H)" + entry.Key, 1, allowNull: true) as Hat;
+        }
+        catch { return null; }
     }
 
     private Texture2D? LoadHandSheet(int i)
