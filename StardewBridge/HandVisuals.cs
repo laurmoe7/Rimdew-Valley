@@ -319,7 +319,7 @@ public partial class ModEntry
             a.NextShot = (int)Game1.ticks + gun.Cooldown * 2 + Game1.random.Next(0, 12);
             a.LastShot = (int)Game1.ticks;
             int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
-            var muzzle = HandPosFor(feet, facing) + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
+            var muzzle = HandPosFor(feet, facing, a.Dir is 1 or 3) + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
             PlayGunShot(gun, muzzle);
             float spread = (float)((Game1.random.NextDouble() - 0.5) * 0.25 / (1 + skill * 0.15));
             int pellets = gun.Pellets;
@@ -510,7 +510,7 @@ public partial class ModEntry
                 if (a.Armed && a.Weapon != null)
                 {
                     int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
-                    DrawGunSprite(b, a.Weapon, HandPosFor(a.Pos + new Vector2(32, 32), facing), a.Aim, facing, a.Pos.Y + 64, a.LastShot);
+                    DrawGunSprite(b, a.Weapon, HandPosFor(a.Pos + new Vector2(32, 32), facing, !a.Moving && a.Dir is 1 or 3), a.Aim, facing, a.Pos.Y + 64, a.LastShot);
                 }
             }
             else b.Draw(Game1.shadowTexture, local + new Vector2(32, 60), null, Color.White, 0f,
@@ -545,7 +545,8 @@ public partial class ModEntry
         f.currentLocation = Game1.currentLocation;
         f.Position = a.Pos + new Vector2(0, bobY);
         f.FacingDirection = facing;
-        f.FarmerSprite.setCurrentSingleFrame(frame, 32000, false, facing == 3);
+        bool aimPose = a.Armed && !a.Moving && (facing == 1 || facing == 3);
+        f.FarmerSprite.setCurrentSingleFrame(aimPose ? AimPoseFrame : frame, 32000, false, facing == 3);
         f.draw(b);
     }
 

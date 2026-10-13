@@ -235,18 +235,22 @@ public partial class ModEntry
 
     /// <summary>Hand position for someone standing with their feet at <paramref name="feet"/>, facing a Stardew direction
     /// (0 up, 1 right, 2 down, 3 left).</summary>
-    private static Vector2 HandPosFor(Vector2 feet, int facing) => feet + facing switch
+    private static Vector2 HandPosFor(Vector2 feet, int facing, bool posed = false) => feet + facing switch
     {
-        1 => new Vector2(12, -22),
-        3 => new Vector2(-12, -22),
+        1 => posed ? new Vector2(22, -46) : new Vector2(12, -22),   // posed: farmer sheet frame 89, arm straight out
+        3 => posed ? new Vector2(-22, -46) : new Vector2(-12, -22),
         2 => new Vector2(12, -14),
         _ => new Vector2(-12, -24)
     };
 
+    /// <summary>Farmer-sheet frame with both arms held out in front (facing right; flipped for left).</summary>
+    private const int AimPoseFrame = 89;
+    private bool playerPosed;
+
     private Vector2 HandPos()
     {
         var c = Game1.player.StandingPixel;
-        return HandPosFor(new Vector2(c.X, c.Y), Game1.player.FacingDirection);
+        return HandPosFor(new Vector2(c.X, c.Y), Game1.player.FacingDirection, playerPosed);
     }
 
     private float AimAngle()
@@ -353,6 +357,11 @@ public partial class ModEntry
         float angle = AimAngle();
         // Turn the farmer toward the aim point.
         Game1.player.faceDirection(Math.Abs(Math.Cos(angle)) > Math.Abs(Math.Sin(angle)) ? (Math.Cos(angle) > 0 ? 1 : 3) : (Math.Sin(angle) > 0 ? 2 : 0));
+
+        // Stardew's own arms-out pose when standing and aiming sideways (set after faceDirection, which resets the frame).
+        int face = Game1.player.FacingDirection;
+        playerPosed = (face == 1 || face == 3) && !Game1.player.isMoving() && Game1.player.CanMove && !Game1.player.UsingTool;
+        if (playerPosed) Game1.player.FarmerSprite.setCurrentSingleFrame(AimPoseFrame, 32000, false, face == 3);
 
         // Hold left click to keep firing at the gun's own fire rate.
         if (!leftDown || e.Ticks < nextShotTick) return;
