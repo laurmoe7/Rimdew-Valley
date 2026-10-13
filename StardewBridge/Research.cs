@@ -20,7 +20,7 @@ public partial class ModEntry
         ["Furnace"] = "Furnace"
     };
 
-    private JArray lastProjects = new();
+    internal JArray lastProjects = new();
 
     private void OnResearchState(JObject msg)
     {

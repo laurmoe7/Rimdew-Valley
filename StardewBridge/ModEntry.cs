@@ -14,6 +14,7 @@ public class SaveData
     public bool GateRecipes { get; set; }
     public string ResearchTarget { get; set; } = "";
     public long LastEarned { get; set; }
+    public Dictionary<string, int> Priorities { get; set; } = new(); // "name|task" -> 0..4
 }
 
 /// <summary>Stardew side of the bridge: Stardew is the visible game, RimWorld simulates in the background.
@@ -22,9 +23,17 @@ public partial class ModEntry : Mod
 {
     private HubClient hub = null!;
     private SaveData data = new();
+    internal ModConfig Config = new();
+    internal bool RimWorldOnline;
+    internal JArray LastHands = new();
+    internal JObject? LastHealth;
+    internal readonly Dictionary<string, string> NpcLabel = new();
+    internal HubClient Hub => hub;
+    internal SaveData Data => data;
 
     public override void Entry(IModHelper helper)
     {
+        Config = helper.ReadConfig<ModConfig>();
         hub = new HubClient("127.0.0.1", 7777, m => Monitor.Log(m, LogLevel.Info));
 
         helper.Events.GameLoop.SaveLoaded += (_, _) => OnSaveLoaded();
@@ -33,6 +42,7 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.DayEnding += (_, _) => OnDayEnding();
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
+        helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
         RegisterCommands();
     }
@@ -53,6 +63,11 @@ public partial class ModEntry : Mod
         var npcs = Utility.getAllVillagers().Where(n => n.CanSocialize).Select(n => n.Name).Distinct().ToList();
         Send(new JObject { ["type"] = "npc_list", ["npcs"] = new JArray(npcs) });
         foreach (var h in data.Hands) Send(new JObject { ["type"] = "hire", ["name"] = h });
+        foreach (var (key, v) in data.Priorities)
+        {
+            var parts = key.Split('|');
+            Send(new JObject { ["type"] = "priority", ["name"] = parts[0], ["task"] = parts[1], ["value"] = v });
+        }
         if (data.ResearchTarget != "") Send(new JObject { ["type"] = "research_set", ["id"] = data.ResearchTarget });
     }
 
@@ -126,8 +141,10 @@ public partial class ModEntry : Mod
     {
         switch ((string?)msg["type"])
         {
+            case "welcome": RimWorldOnline = (bool)msg["peer_online"]!; break;
             case "peer_status":
                 bool online = (bool)msg["online"]!;
+                RimWorldOnline = online;
                 Game1.addHUDMessage(new HUDMessage(online ? "RimWorld connected" : "RimWorld disconnected", HUDMessage.newQuest_type));
                 if (online) SendRoster();
                 break;

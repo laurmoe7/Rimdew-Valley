@@ -10,8 +10,8 @@ namespace StardewBridge;
 public partial class ModEntry
 {
     private readonly Dictionary<string, (int gifts, bool talked)> seenFriendship = new();
-    private readonly Dictionary<string, double> npcMood = new();
-    private readonly HashSet<string> npcBroken = new();
+    internal readonly Dictionary<string, double> npcMood = new();
+    internal readonly HashSet<string> npcBroken = new();
     private Item? heldPrev;
 
     private void TickVillagers(UpdateTickedEventArgs e)
@@ -68,6 +68,7 @@ public partial class ModEntry
             double mood = (double)n["mood"]!;
             bool brk = (bool)n["break"]!;
             npcMood[name] = mood;
+            NpcLabel[name] = brk ? (string)n["label"]! : "";
             var npc = Game1.getCharacterFromName(name);
             if (npc == null) continue;
 

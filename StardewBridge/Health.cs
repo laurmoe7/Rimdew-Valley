@@ -44,6 +44,7 @@ public partial class ModEntry
 
     private void OnHealthState(JObject msg)
     {
+        LastHealth = msg;
         double moving = (double)msg["moving"]!, manip = (double)msg["manipulation"]!, pain = (double)msg["pain"]!;
         bleed = (double)msg["bleed"]!;
         bool dead = (bool)msg["dead"]!;

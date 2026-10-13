@@ -11,7 +11,7 @@ namespace StardewBridge;
 /// the farm's chores; RimWorld says how many each hand got through, and we apply that to the farm.</summary>
 public partial class ModEntry
 {
-    private const int DailyWage = 100;
+    internal const int DailyWage = 100;
 
     private bool PayHands()
     {
@@ -49,6 +49,7 @@ public partial class ModEntry
 
     private void OnWorkDone(JObject msg)
     {
+        LastHands = (JArray)msg["hands"]!;
         if (data.Hands.Count == 0) return;
         var farm = Game1.getFarm();
         int wantWater = (int)msg["water"]!, wantHarvest = (int)msg["harvest"]!, wantAnimals = (int)msg["animals"]!;

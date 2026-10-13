@@ -32,7 +32,7 @@ public partial class ModEntry
         c.Add("rd_priority", "Set a hand's chore priority 0 (off) to 4. rd_priority <name> <water|harvest|animals> <0-4>", (_, a) =>
         {
             if (!Ready() || a.Length < 3 || !int.TryParse(a[2], out var v)) { Monitor.Log("Usage: rd_priority <name> <water|harvest|animals> <0-4>", LogLevel.Warn); return; }
-            Send(new JObject { ["type"] = "priority", ["name"] = a[0], ["task"] = a[1], ["value"] = v });
+            SetPriority(a[0], a[1], v);
         });
         c.Add("rd_tend", "Tend your injuries with a Muscle Remedy or Fiber.", (_, _) => { if (Ready()) TendCommand(); });
         c.Add("rd_research", "Show research, or pick a target. rd_research [id]", (_, a) =>
@@ -52,6 +52,7 @@ public partial class ModEntry
             ApplyRecipeGating();
             Monitor.Log($"Recipe gating {(data.GateRecipes ? "ON" : "off")}.", LogLevel.Info);
         });
+        c.Add("rd_menu", "Open the RimDew menu (also F8).", (_, _) => OpenMenu());
         c.Add("rd_moods", "Show villager moods reported by RimWorld.", (_, _) =>
         {
             foreach (var (name, mood) in npcMood.OrderBy(x => x.Value))
@@ -62,6 +63,47 @@ public partial class ModEntry
             if (!Ready()) return;
             SpawnMonsters(a.Length > 1 && int.TryParse(a[1], out var n) ? n : 3, a.Length > 0 ? a[0] : "slime");
         });
+    }
+
+    internal void SetPriority(string name, string task, int v)
+    {
+        data.Priorities[name + "|" + task] = v;
+        Send(new JObject { ["type"] = "priority", ["name"] = name, ["task"] = task, ["value"] = v });
+    }
+
+    internal static readonly string[] HandNames = { "Bob", "Sam", "Alex", "Casey", "Jordan", "Riley", "Morgan", "Quinn", "Avery", "Drew" };
+
+    internal void HireNext()
+    {
+        string name = HandNames.FirstOrDefault(n => !data.Hands.Contains(n)) ?? "Hand" + (data.Hands.Count + 1);
+        data.Hands.Add(name);
+        Send(new JObject { ["type"] = "hire", ["name"] = name });
+    }
+
+    internal void FireHand(string name)
+    {
+        data.Hands.Remove(name);
+        Send(new JObject { ["type"] = "fire", ["name"] = name });
+    }
+
+    internal void SetResearchTarget(string id)
+    {
+        data.ResearchTarget = id;
+        Send(new JObject { ["type"] = "research_set", ["id"] = id });
+    }
+
+    internal void ToggleGate()
+    {
+        data.GateRecipes = !data.GateRecipes;
+        ApplyRecipeGating();
+    }
+
+    internal void Tend() { if (Ready()) TendCommand(); }
+
+    internal void OpenMenu()
+    {
+        if (!Context.IsWorldReady || Game1.activeClickableMenu != null) return;
+        Game1.activeClickableMenu = new RimDewMenu(this);
     }
 
     private bool Ready()
