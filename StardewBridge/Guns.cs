@@ -356,7 +356,10 @@ public partial class ModEntry
         if (gun == null) return;
         float angle = AimAngle();
         // Turn the farmer toward the aim point.
-        Game1.player.faceDirection(Math.Abs(Math.Cos(angle)) > Math.Abs(Math.Sin(angle)) ? (Math.Cos(angle) > 0 ? 1 : 3) : (Math.Sin(angle) > 0 ? 2 : 0));
+        // Only turn toward the cursor when standing: faceDirection also resets the sprite to its standing frame, which
+        // would freeze the legs every tick while walking (the farmer would slide). While moving, the game's walk animation owns facing.
+        if (!Game1.player.isMoving())
+            Game1.player.faceDirection(Math.Abs(Math.Cos(angle)) > Math.Abs(Math.Sin(angle)) ? (Math.Cos(angle) > 0 ? 1 : 3) : (Math.Sin(angle) > 0 ? 2 : 0));
 
         // Stardew's own arms-out pose when standing and aiming sideways (set after faceDirection, which resets the frame).
         int face = Game1.player.FacingDirection;
