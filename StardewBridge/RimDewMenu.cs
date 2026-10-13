@@ -265,7 +265,7 @@ public class RimDewMenu : IClickableMenu
         {
             ("Farm", new (string, Action)[] { ("Clear debris", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
                 ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit),
-                ("Free bunkhouse", mod.PlaceFreeBunkhouse) }),
+                ("Place bunkhouse", mod.PlaceBunkhouse) }),
             ("Monsters (local)", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
                 ("Weapons kit", mod.GiveWeaponsKit) }),

@@ -42,24 +42,10 @@ public partial class ModEntry
         Hud($"Planted {planted} parsnips by the farmhouse.", HUDMessage.achievement_type);
     }
 
-    /// <summary>Place a finished Bunkhouse a few tiles from the player (testing; normally buy it from Robin).</summary>
-    internal void PlaceFreeBunkhouse()
+    /// <summary>Open the same placement screen Robin uses, offering a free, instant Bunkhouse.</summary>
+    internal void PlaceBunkhouse()
     {
-        var farm = Game1.getFarm();
-        var p = Game1.player.Tile;
-        for (int dx = 5; dx < 30; dx += 2)
-            foreach (int dy in new[] { 0, -3, 3, -6, 6 })
-            {
-                var tile = new Vector2(p.X + dx, p.Y + dy);
-                if (farm.buildStructure(BunkId, tile, Game1.player, out var built, magicalConstruction: true, skipSafetyChecks: false))
-                {
-                    built.daysOfConstructionLeft.Value = 0;
-                    SyncHands(false);
-                    Hud("Bunkhouse placed. Your farmhands will gather at its door.", HUDMessage.achievement_type);
-                    return;
-                }
-            }
-        Hud("No room nearby for a bunkhouse. Move to open ground and try again.", HUDMessage.error_type);
+        Game1.activeClickableMenu = new StardewValley.Menus.CarpenterMenu(TestBuilder);
     }
 
     internal void GrowAllCrops()

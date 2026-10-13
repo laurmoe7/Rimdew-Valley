@@ -16,6 +16,8 @@ public partial class ModEntry
 {
     private const string GunPrefix = "laurm.RimDew_";
     internal const string BunkId = "laurm.RimDew_Bunkhouse";
+    internal const string BunkFreeId = "laurm.RimDew_BunkhouseFree";
+    internal const string TestBuilder = "laurm.RimDew_Builder";
     private const string IconAsset = "Mods/laurm.StardewBridge/GunIcons";
 
     private record Gun(string Id, string Name, string Sprite, int MinDmg, int MaxDmg, int Cooldown, bool Auto,
@@ -62,6 +64,15 @@ public partial class ModEntry
                 };
                 bunk.BuildCondition = null;
                 data[BunkId] = bunk;
+
+                // Test variant: free and instant, only listed in the menu opened from the Test tab.
+                var free = Newtonsoft.Json.JsonConvert.DeserializeObject<BuildingData>(Newtonsoft.Json.JsonConvert.SerializeObject(bunk))!;
+                free.Name = "Bunkhouse (free)";
+                free.Builder = TestBuilder;
+                free.BuildCost = 0;
+                free.BuildDays = 0;
+                free.BuildMaterials = new List<BuildingMaterial>();
+                data[BunkFreeId] = free;
             });
         }
         else if (e.NameWithoutLocale.IsEquivalentTo("Data/Weapons"))

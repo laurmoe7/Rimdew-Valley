@@ -61,7 +61,7 @@ public partial class ModEntry
     private Vector2 HomeFor(int i)
     {
         var farm = Game1.getFarm();
-        var bunks = farm.buildings.Where(b => b.buildingType.Value == BunkId && b.daysOfConstructionLeft.Value <= 0).ToList();
+        var bunks = farm.buildings.Where(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0).ToList();
         int bunkIndex = i / BunkCapacity;
         if (bunkIndex < bunks.Count)
         {
