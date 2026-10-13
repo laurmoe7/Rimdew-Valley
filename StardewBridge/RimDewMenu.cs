@@ -162,6 +162,7 @@ public class RimDewMenu : IClickableMenu
         {
             Text(b, "Hands water, harvest and feed animals overnight. Their skills and moods come from RimWorld.", c.X, c.Y + 10);
             Text(b, "Click a chore to cycle its priority: 1 first ... 4 last, 0 = off.", c.X, c.Y + 44);
+            Text(b, "Build a Bunkhouse at Robin's carpenter shop for them to stay in (4 per house).", c.X, c.Y + 78);
             return;
         }
 
@@ -263,7 +264,8 @@ public class RimDewMenu : IClickableMenu
         var sections = new (string title, (string label, Action act)[] buttons)[]
         {
             ("Farm", new (string, Action)[] { ("Clear debris", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
-                ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit) }),
+                ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit),
+                ("Free bunkhouse", mod.PlaceFreeBunkhouse) }),
             ("Monsters (local)", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
                 ("Weapons kit", mod.GiveWeaponsKit) }),

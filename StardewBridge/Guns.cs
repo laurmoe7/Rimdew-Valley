@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.GameData.Buildings;
 using StardewValley.GameData.Weapons;
 using StardewValley.Projectiles;
 
@@ -14,6 +15,7 @@ namespace StardewBridge;
 public partial class ModEntry
 {
     private const string GunPrefix = "laurm.RimDew_";
+    internal const string BunkId = "laurm.RimDew_Bunkhouse";
     private const string IconAsset = "Mods/laurm.StardewBridge/GunIcons";
 
     private record Gun(string Id, string Name, string Sprite, int MinDmg, int MaxDmg, int Cooldown, bool Auto,
@@ -40,7 +42,28 @@ public partial class ModEntry
     // ---------- content: item definitions + inventory icons ----------
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
     {
-        if (e.NameWithoutLocale.IsEquivalentTo("Data/Weapons"))
+        if (e.NameWithoutLocale.IsEquivalentTo("Data/Buildings"))
+        {
+            e.Edit(asset =>
+            {
+                var data = asset.AsDictionary<string, BuildingData>().Data;
+                if (!data.TryGetValue("Shed", out var shed)) return;
+                var bunk = Newtonsoft.Json.JsonConvert.DeserializeObject<BuildingData>(Newtonsoft.Json.JsonConvert.SerializeObject(shed))!;
+                bunk.Name = "Bunkhouse";
+                bunk.Description = "A place for your farmhands to stay. Houses up to 4. They gather by the door.";
+                bunk.Builder = "Robin";
+                bunk.BuildCost = 2000;
+                bunk.BuildDays = 2;
+                bunk.BuildMaterials = new List<BuildingMaterial>
+                {
+                    new() { ItemId = "(O)388", Amount = 200 },   // wood
+                    new() { ItemId = "(O)390", Amount = 100 }    // stone
+                };
+                bunk.BuildCondition = null;
+                data[BunkId] = bunk;
+            });
+        }
+        else if (e.NameWithoutLocale.IsEquivalentTo("Data/Weapons"))
         {
             e.Edit(asset =>
             {
@@ -167,18 +190,20 @@ public partial class ModEntry
         return id.StartsWith(GunPrefix) ? Guns.FirstOrDefault(g => GunPrefix + g.Id == id) : null;
     }
 
-    /// <summary>World position of the farmer's hands for the way they face (feet-relative offsets).</summary>
+    /// <summary>Hand position for someone standing with their feet at <paramref name="feet"/>, facing a Stardew direction
+    /// (0 up, 1 right, 2 down, 3 left).</summary>
+    private static Vector2 HandPosFor(Vector2 feet, int facing) => feet + facing switch
+    {
+        1 => new Vector2(18, -34),
+        3 => new Vector2(-18, -34),
+        2 => new Vector2(14, -26),
+        _ => new Vector2(-14, -38)
+    };
+
     private Vector2 HandPos()
     {
         var c = Game1.player.StandingPixel;
-        Vector2 off = Game1.player.FacingDirection switch
-        {
-            1 => new Vector2(18, -34),    // right
-            3 => new Vector2(-18, -34),   // left
-            2 => new Vector2(14, -26),    // down (toward camera)
-            _ => new Vector2(-14, -38)    // up
-        };
-        return new Vector2(c.X, c.Y) + off;
+        return HandPosFor(new Vector2(c.X, c.Y), Game1.player.FacingDirection);
     }
 
     private float AimAngle()
@@ -188,6 +213,23 @@ public partial class ModEntry
     }
 
     private Vector2 Muzzle(float angle) => HandPos() + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * 40f;
+
+    private static void SpawnBullet(GameLocation where, Gun gun, Vector2 muzzle, float angle, int dmg, bool withSound)
+    {
+        var proj = new BasicProjectile(dmg, 12, 0, 0, 0f, (float)Math.Cos(angle) * gun.Speed, (float)Math.Sin(angle) * gun.Speed,
+            muzzle, "hitEnemy", "", withSound ? "slingshot" : "", false, true, where, Game1.player, shotItemId: "(O)382");
+        where.projectiles.Add(proj);
+    }
+
+    /// <summary>Better shooters get better guns.</summary>
+    private static Gun GunForSkill(int shooting) => shooting switch
+    {
+        < 4 => Guns[0],    // Revolver
+        < 8 => Guns[1],    // Autopistol
+        < 12 => Guns[3],   // Assault Rifle
+        < 16 => Guns[4],   // Bolt-Action Rifle
+        _ => Guns[5]       // Sniper Rifle
+    };
 
     private int toolLockTicks;
 
@@ -229,10 +271,7 @@ public partial class ModEntry
         {
             float a = angle + (float)((rng.NextDouble() - 0.5) * 2 * gun.Spread);
             int dmg = rng.Next(gun.MinDmg, gun.MaxDmg + 1);
-            var proj = new BasicProjectile(dmg, 12, 0, 0, 0f, (float)Math.Cos(a) * gun.Speed, (float)Math.Sin(a) * gun.Speed,
-                Muzzle(a), "hitEnemy", "", p == 0 ? "slingshot" : "", false, true, Game1.currentLocation, Game1.player,
-                shotItemId: "(O)382");
-            Game1.currentLocation.projectiles.Add(proj);
+            SpawnBullet(Game1.currentLocation, gun, Muzzle(a), a, dmg, p == 0);
         }
     }
 
@@ -249,22 +288,24 @@ public partial class ModEntry
     {
         var gun = HeldGun();
         if (gun == null) return;
+        var c = Game1.player.StandingPixel;
+        DrawGunSprite(e.SpriteBatch, gun, HandPos(), AimAngle(), Game1.player.FacingDirection, c.Y, lastShotTick);
+    }
+
+    /// <summary>Draw a gun in a hand, aimed along <paramref name="angle"/>. Works for the player and for farmhands.</summary>
+    private void DrawGunSprite(SpriteBatch b, Gun gun, Vector2 hand, float angle, int facing, float footY, int shotTick)
+    {
         var tex = LoadGunSprite(gun);
         if (tex == null) return;
-
-        float angle = AimAngle();
         var dir = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle));
         bool left = dir.X < 0;
-        var hand = HandPos();
-        int sinceShot = (int)Game1.ticks - lastShotTick;
+        int sinceShot = (int)Game1.ticks - shotTick;
         if (sinceShot >= 0 && sinceShot < 6) hand -= dir * (6 - sinceShot) * 1.2f;   // recoil kick
 
-        float scale = 52f / Math.Max(tex.Width, tex.Height);                         // longest side ~52 px
-        // RimWorld guns face right with the grip near the left-centre; the grip sits in the hand.
+        float scale = 52f / Math.Max(tex.Width, tex.Height);
         var origin = new Vector2(left ? tex.Width * 0.72f : tex.Width * 0.28f, tex.Height * 0.62f);
-        var c = Game1.player.StandingPixel;
-        float depth = (Game1.player.FacingDirection == 0 ? c.Y - 6 : c.Y + 10) / 10000f;   // behind the body when facing up
-        e.SpriteBatch.Draw(tex, Game1.GlobalToLocal(Game1.viewport, hand), null, Color.White,
+        float depth = (facing == 0 ? footY - 6 : footY + 10) / 10000f;               // behind the body when facing up
+        b.Draw(tex, Game1.GlobalToLocal(Game1.viewport, hand), null, Color.White,
             left ? angle + (float)Math.PI : angle, origin, scale,
             left ? SpriteEffects.FlipHorizontally : SpriteEffects.None, depth);
     }

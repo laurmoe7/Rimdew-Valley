@@ -12,6 +12,7 @@ namespace StardewBridge;
 public partial class ModEntry
 {
     private const string InjuryBuffId = "laurm.StardewBridge/injury";
+    private const string MoodBuffId = "laurm.StardewBridge/mood";
     private int lastHealth;
     private double lastTendQuality;
     private double bleed;
@@ -63,6 +64,20 @@ public partial class ModEntry
             Game1.player.applyBuff(new Buff(InjuryBuffId, displaySource: "Injuries", duration: Buff.ENDLESS,
                 effects: effects, isDebuff: true, displayName: "Injured",
                 description: injuries.Count > 0 ? string.Join(", ", injuries) : "Recovering"));
+        }
+
+        // Farmer's own RimWorld mood (pain, weather, chats, festivals, raids) shifts stamina and luck.
+        Game1.player.buffs.Remove(MoodBuffId);
+        if (msg["mood"] is JValue mv && !dead)
+        {
+            double mood = (double)mv;
+            var m = new BuffEffects();
+            m.MaxStamina.Value = (float)Math.Round((mood - 0.5) * 80);
+            m.LuckLevel.Value = mood >= 0.8 ? 1 : mood <= 0.2 ? -1 : 0;
+            if (Math.Abs(m.MaxStamina.Value) >= 4)
+                Game1.player.applyBuff(new Buff(MoodBuffId, displaySource: "Mood", duration: Buff.ENDLESS, effects: m,
+                    isDebuff: m.MaxStamina.Value < 0, displayName: mood >= 0.5 ? "Good mood" : "Bad mood",
+                    description: $"Mood {mood:0.00}: {m.MaxStamina.Value:+0;-0} max stamina"));
         }
 
         if (dead)

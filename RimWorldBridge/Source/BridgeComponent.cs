@@ -161,6 +161,8 @@ namespace RimDewBridge
 
         private void NpcEvent(string npc, string kind)
         {
+            // The farmer feels good about every chat and festival too.
+            if (kind == "talked" || kind == "festival") { var farmer = Get("farmer"); if (farmer != null) GainThought(farmer, kind); }
             var p = Get("npc:" + npc) ?? Get("hand:" + npc);
             if (p == null || p.needs == null) return;
             GainThought(p, kind);
@@ -240,7 +242,7 @@ namespace RimDewBridge
             }
             Send(new Dictionary<string, object>
             {
-                { "type", "health_state" }, { "phase", day ? "day" : tend ? "tend" : "event" },
+                { "type", "health_state" }, { "mood", Math.Round(p.needs != null && p.needs.mood != null ? Mood(p) : 0.5f, 2) }, { "phase", day ? "day" : tend ? "tend" : "event" },
                 { "dead", p.Dead },
                 { "downed", p.Downed },
                 { "health_pct", Math.Round(p.health.summaryHealth.SummaryHealthPercent, 2) },
@@ -270,7 +272,7 @@ namespace RimDewBridge
                 if (p.needs.food != null) p.needs.food.CurLevel = Mathf.Max(p.needs.food.CurLevel, 0.8f);
                 if (p.needs.rest != null) p.needs.rest.CurLevel = Mathf.Max(p.needs.rest.CurLevel, 0.9f);
                 GainThought(p, "valley_life"); // offsets the gloom of standing on a bare map; see Thoughts_Stardew.xml
-                if (kv.Key.StartsWith("npc:") && bad) GainThought(p, "bad_weather");
+                if ((kv.Key.StartsWith("npc:") || kv.Key == "farmer") && bad) GainThought(p, "bad_weather");
                 if (kv.Key.StartsWith("hand:")) GainThought(p, paid ? "paid" : "unpaid");
             }
             ApplyResearch(m.Num("research_points"));
@@ -309,6 +311,7 @@ namespace RimDewBridge
                 {
                     { "name", kv.Key.Substring(5) }, { "mood", Math.Round(mood, 2) },
                     { "plants", p.skills.GetSkill(SkillDefOf.Plants).Level }, { "animals", p.skills.GetSkill(SkillDefOf.Animals).Level },
+                    { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
                 });
             }
@@ -354,6 +357,7 @@ namespace RimDewBridge
                 hands.Add(new Dictionary<string, object>
                 {
                     { "name", name }, { "mood", Math.Round(mood, 2) }, { "plants", plants }, { "animals", animals },
+                    { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
                     { "hours", Math.Round(workedHours, 1) },
                     { "did_water", (int)mine["water"] }, { "did_harvest", (int)mine["harvest"] }, { "did_feed", (int)mine["animals"] },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
@@ -414,7 +418,7 @@ namespace RimDewBridge
         public void MoodHit(string kind)
         {
             foreach (var kv in pawns)
-                if (kv.Value != null && !kv.Value.Dead && kv.Key.StartsWith("npc:")) GainThought(kv.Value, kind);
+                if (kv.Value != null && !kv.Value.Dead && (kv.Key.StartsWith("npc:") || kv.Key == "farmer")) GainThought(kv.Value, kind);
         }
 
         // ---- items (from the original item bridge) ----

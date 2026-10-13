@@ -16,14 +16,14 @@ namespace StardewBridge;
 /// they walk out and do them one by one.</summary>
 public partial class ModEntry
 {
-    internal class HandJob
+    private class HandJob
     {
         public string Kind = "";           // water | harvest | animals
         public Vector2 Tile;               // crop tile (water/harvest)
         public FarmAnimal? Animal;         // animals
     }
 
-    internal class HandActor
+    private class HandActor
     {
         public string Name = "";
         public Texture2D? Sheet;          // fallback look
@@ -36,6 +36,10 @@ public partial class ModEntry
         public int WorkTimer;
         public readonly Queue<HandJob> Jobs = new();
         public string Activity = "resting";
+        public bool Armed;
+        public float Aim;
+        public Gun? Weapon;
+        public int NextShot, LastShot = -100;
     }
 
     private const float HandSpeed = 3f;
@@ -52,10 +56,31 @@ public partial class ModEntry
     };
 
     // ---------- lifecycle ----------
+    private const int BunkCapacity = 4;
+
     private Vector2 HomeFor(int i)
     {
-        var door = Game1.getFarm().GetMainFarmHouseEntry();
-        return new Vector2((door.X - 1 + i % 6) * 64, (door.Y + 2 + i / 6) * 64);
+        var farm = Game1.getFarm();
+        var bunks = farm.buildings.Where(b => b.buildingType.Value == BunkId && b.daysOfConstructionLeft.Value <= 0).ToList();
+        int bunkIndex = i / BunkCapacity;
+        if (bunkIndex < bunks.Count)
+        {
+            var b = bunks[bunkIndex];
+            int slot = i % BunkCapacity;
+            int doorX = b.tileX.Value + b.humanDoor.Value.X, doorY = b.tileY.Value + b.humanDoor.Value.Y;
+            return new Vector2((doorX - 1 + slot) * 64, (doorY + 1 + slot % 2) * 64);
+        }
+        // No bunkhouse (or it is full): gather to the side of the farmhouse, not in front of the door.
+        var door = farm.GetMainFarmHouseEntry();
+        int j = i - bunks.Count * BunkCapacity;
+        return new Vector2((door.X + 6 + j % 4) * 64, (door.Y + 1 + j / 4) * 64);
+    }
+
+    /// <summary>Re-evaluate homes (a bunkhouse may have just been finished).</summary>
+    private void RefreshHomes()
+    {
+        for (int i = 0; i < data.Hands.Count; i++)
+            if (actors.TryGetValue(data.Hands[i], out var a)) a.Home = HomeFor(i);
     }
 
     /// <summary>Make the on-screen hands match the hired list. reset = send everyone home and drop pending chores.</summary>
@@ -178,7 +203,7 @@ public partial class ModEntry
             string name = (string)f["name"]!;
             var existing = LastHands.FirstOrDefault(h => (string?)h["name"] == name) as JObject;
             if (existing == null) LastHands.Add(new JObject(f) { ["hours"] = 0.0 });
-            else foreach (var key in new[] { "mood", "plants", "animals", "status" }) existing[key] = f[key];
+            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status" }) existing[key] = f[key];
         }
         foreach (var gone in LastHands.Where(h => !data.Hands.Contains((string)h["name"]!)).ToList()) gone.Remove();
     }
@@ -235,10 +260,69 @@ public partial class ModEntry
     }
 
     // ---------- per-tick behaviour ----------
+    private bool HandCanFight(HandActor a)
+    {
+        var info = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
+        return info == null || ((string?)info["status"] == "ok" && (double)info["mood"]! > 0.25);
+    }
+
+    /// <summary>Defend the farm: walk into range of the nearest monster and shoot with a gun matched to the hand's
+    /// RimWorld Shooting skill.</summary>
+    private void Fight(HandActor a, List<StardewValley.Monsters.Monster> monsters)
+    {
+        var info = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
+        int skill = (int?)info?["shooting"] ?? 3;
+        var gun = GunForSkill(skill);
+        a.Weapon = gun;
+        a.Armed = true;
+        a.Activity = "defending";
+
+        var feet = a.Pos + new Vector2(32, 64);
+        var target = monsters.OrderBy(m => Vector2.DistanceSquared(m.Position, feet)).First();
+        var to = target.Position + new Vector2(32, 32) - feet;
+        float dist = to.Length();
+        a.Aim = (float)Math.Atan2(to.Y, to.X);
+        a.Dir = Math.Abs(to.X) > Math.Abs(to.Y) ? (to.X > 0 ? 1 : 3) : (to.Y > 0 ? 0 : 2);
+
+        a.Moving = dist > 360;
+        if (a.Moving) a.Pos += to / dist * HandSpeed * 1.2f;
+
+        if (dist <= 520 && Game1.ticks >= a.NextShot)
+        {
+            a.NextShot = (int)Game1.ticks + gun.Cooldown * 2 + Game1.random.Next(0, 12);
+            a.LastShot = (int)Game1.ticks;
+            int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
+            var muzzle = HandPosFor(feet, facing) + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
+            float spread = (float)((Game1.random.NextDouble() - 0.5) * 0.25 / (1 + skill * 0.15));
+            int pellets = gun.Pellets;
+            for (int p = 0; p < pellets; p++)
+            {
+                float ang = a.Aim + spread + (pellets > 1 ? (float)((Game1.random.NextDouble() - 0.5) * gun.Spread * 2) : 0f);
+                int dmg = (int)(Game1.random.Next(gun.MinDmg, gun.MaxDmg + 1) * (0.5 + skill * 0.07));
+                SpawnBullet(Game1.getFarm(), gun, muzzle, ang, Math.Max(1, dmg), p == 0);
+            }
+        }
+    }
+
+    private readonly List<(int tick, int count, string kind)> pendingSpawns = new();
+
     private void TickHands()
     {
+        // Delayed raid arrivals (the warning pop-up fires when they are scheduled).
+        for (int i = pendingSpawns.Count - 1; i >= 0; i--)
+            if (Game1.ticks >= pendingSpawns[i].tick)
+            {
+                SpawnMonsters(pendingSpawns[i].count, pendingSpawns[i].kind);
+                pendingSpawns.RemoveAt(i);
+            }
+
+        if (Game1.ticks % 300 == 0) RefreshHomes();
+        var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)
         {
+            a.Armed = false;
+            if (monsters.Count > 0 && HandCanFight(a)) { Fight(a, monsters); continue; }
+
             if (a.Current == null && a.Jobs.Count > 0) { a.Current = a.Jobs.Dequeue(); a.WorkTimer = 0; }
 
             Vector2 target = a.Current == null ? a.Home : StandSpot(a.Current);
@@ -345,6 +429,11 @@ public partial class ModEntry
             if (a.Body != null)
             {
                 DrawBody(b, a, bobY);
+                if (a.Armed && a.Weapon != null)
+                {
+                    int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
+                    DrawGunSprite(b, a.Weapon, HandPosFor(a.Pos + new Vector2(32, 64), facing), a.Aim, facing, a.Pos.Y + 64, a.LastShot);
+                }
             }
             else b.Draw(Game1.shadowTexture, local + new Vector2(32, 60), null, Color.White, 0f,
                 new Vector2(Game1.shadowTexture.Bounds.Center.X, Game1.shadowTexture.Bounds.Center.Y), 4f, SpriteEffects.None, depth - 0.0001f);

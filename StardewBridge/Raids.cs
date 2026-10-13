@@ -41,8 +41,10 @@ public partial class ModEntry
                 Hud($"{label}!", HUDMessage.error_type);
                 break;
             default:
-                Hud($"{label}: monsters are approaching the farm!", HUDMessage.error_type);
-                SpawnMonsters(Math.Clamp(points / 80, 2, 14), points < 250 ? "slime" : points < 600 ? "bat" : points < 1200 ? "brute" : "skeleton");
+                int n = Math.Clamp(points / 80, 2, 14);
+                string kind = points < 250 ? "slime" : points < 600 ? "bat" : points < 1200 ? "brute" : "skeleton";
+                Hud($"{label}! {n} monsters arrive in 10 seconds. Get ready!", HUDMessage.error_type);
+                pendingSpawns.Add(((int)Game1.ticks + 600, n, kind));
                 break;
         }
     }
