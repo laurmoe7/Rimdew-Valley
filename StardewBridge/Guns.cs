@@ -294,7 +294,7 @@ public partial class ModEntry
         var sprite = LoadBulletSprite(gun);
         float length = gun.Bullet == "Bullet_Big" ? 44f : gun.Bullet == "Bullet_Shotgun" ? 24f : 32f;
         where.projectiles.Add(new GunBullet(sprite, length, dmg, (float)Math.Cos(angle) * gun.Speed, (float)Math.Sin(angle) * gun.Speed,
-            muzzle - new Vector2(32, 32), withSound ? "slingshot" : "", where));   // position is top-left; drawn at +32,+32
+            muzzle - new Vector2(32, 32), "", where));   // position is top-left; drawn at +32,+32
     }
 
     /// <summary>Better shooters get better guns.</summary>
@@ -346,6 +346,7 @@ public partial class ModEntry
         nextShotTick = (int)e.Ticks + gun.Cooldown;
         lastShotTick = (int)e.Ticks;
 
+        PlayGunShot(gun, Muzzle(angle));
         var rng = Game1.random;
         for (int p = 0; p < gun.Pellets; p++)
         {

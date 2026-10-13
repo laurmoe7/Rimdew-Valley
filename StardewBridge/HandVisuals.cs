@@ -319,6 +319,7 @@ public partial class ModEntry
             a.LastShot = (int)Game1.ticks;
             int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
             var muzzle = HandPosFor(feet, facing) + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
+            PlayGunShot(gun, muzzle);
             float spread = (float)((Game1.random.NextDouble() - 0.5) * 0.25 / (1 + skill * 0.15));
             int pellets = gun.Pellets;
             for (int p = 0; p < pellets; p++)
