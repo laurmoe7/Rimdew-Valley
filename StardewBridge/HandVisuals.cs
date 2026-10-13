@@ -38,7 +38,11 @@ public partial class ModEntry
         public string Activity = "resting";
         public bool Armed;
         public Vector2? Door;   // bunkhouse door tile (px) if they have one
-        public bool Inside;     // currently indoors: not drawn, not clickable
+        public bool Inside;
+        public List<Vector2>? Path;
+        public Point PathGoal = new(-99999, -99999);
+        public int PathIdx;
+        public bool Unreachable;     // currently indoors: not drawn, not clickable
         public float Aim;
         public Gun? Weapon;
         public int NextShot, LastShot = -100;
@@ -299,10 +303,17 @@ public partial class ModEntry
         a.Aim = (float)Math.Atan2(to.Y, to.X);
         a.Dir = Math.Abs(to.X) > Math.Abs(to.Y) ? (to.X > 0 ? 1 : 3) : (to.Y > 0 ? 0 : 2);
 
-        a.Moving = dist > 360;
-        if (a.Moving) a.Pos += to / dist * HandSpeed * 1.2f;
+        var monsterTile = ToTile(target.Position);
+        bool clear = dist <= 520 && HasLineOfSight(ToTile(a.Pos), monsterTile);
+        if (clear) a.Moving = false;
+        else
+        {
+            // No clear shot: walk (around terrain) toward the monster until there is one.
+            StepTo(a, new Vector2(monsterTile.X * 64, monsterTile.Y * 64), HandSpeed * 1.2f);
+            if (a.Unreachable) { a.Unreachable = false; a.PathGoal = new Point(-99999, -99999); a.Moving = false; }
+        }
 
-        if (dist <= 520 && Game1.ticks >= a.NextShot)
+        if (clear && Game1.ticks >= a.NextShot)
         {
             a.NextShot = (int)Game1.ticks + gun.Cooldown * 2 + Game1.random.Next(0, 12);
             a.LastShot = (int)Game1.ticks;
@@ -331,7 +342,7 @@ public partial class ModEntry
                 pendingSpawns.RemoveAt(i);
             }
 
-        if (Game1.ticks % 300 == 0) RefreshHomes();
+        if (Game1.ticks % 300 == 0) { walkCache.Clear(); RefreshHomes(); }
         var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)
         {
@@ -354,13 +365,19 @@ public partial class ModEntry
             if (a.Current == null && a.Jobs.Count > 0) { a.Current = a.Jobs.Dequeue(); a.WorkTimer = 0; }
 
             Vector2 target = a.Current == null ? (a.Door ?? a.Home) : StandSpot(a.Current);
-            var d = target - a.Pos;
-            float dist = d.Length();
-            if (dist > HandSpeed)
+            bool arrived = StepTo(a, target, HandSpeed);
+            if (a.Unreachable)
             {
-                a.Pos += d / dist * HandSpeed;
-                a.Moving = true;
-                a.Dir = Math.Abs(d.X) > Math.Abs(d.Y) ? (d.X > 0 ? 1 : 3) : (d.Y > 0 ? 0 : 2);
+                // No walkable route (fenced in, blocked...). Never clip through terrain: do the chore from here,
+                // or if heading home just snap there as a last resort.
+                a.Unreachable = false;
+                a.PathGoal = new Point(-99999, -99999);
+                if (a.Current != null) { Perform(a.Current); a.Current = null; continue; }
+                a.Pos = target;
+                arrived = true;
+            }
+            if (!arrived)
+            {
                 a.Activity = a.Current == null ? "heading home" : "walking";
             }
             else
