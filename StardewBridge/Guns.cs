@@ -402,7 +402,6 @@ public partial class ModEntry
     /// <summary>Draw a gun in a hand, aimed along <paramref name="angle"/>. Works for the player and for farmhands.</summary>
     private void DrawGunSprite(SpriteBatch b, Gun gun, Vector2 hand, float angle, int facing, float footY, int shotTick)
     {
-        if (facing == 0) return;   // seen from behind the gun would be drawn across the farmer's back, so hide it
         var tex = LoadGunSprite(gun);
         if (tex == null) return;
         var dir = new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle));
@@ -412,7 +411,8 @@ public partial class ModEntry
 
         float scale = 52f / Math.Max(tex.Width, tex.Height);
         var origin = new Vector2(left ? tex.Width * 0.72f : tex.Width * 0.28f, tex.Height * 0.62f);
-        float depth = (footY + 10) / 10000f;
+        // Seen from behind (facing up) the gun goes well behind the body sprite, so only the part sticking out shows.
+        float depth = (facing == 0 ? footY - 60 : footY + 10) / 10000f;
         b.Draw(tex, Game1.GlobalToLocal(Game1.viewport, hand), null, Color.White,
             left ? angle + (float)Math.PI : angle, origin, scale,
             left ? SpriteEffects.FlipHorizontally : SpriteEffects.None, depth);
