@@ -4,7 +4,9 @@ using Newtonsoft.Json.Linq;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.GameData.Shirts;
 using StardewValley.Locations;
+using StardewValley.Objects;
 using StardewValley.TerrainFeatures;
 
 namespace StardewBridge;
@@ -24,7 +26,8 @@ public partial class ModEntry
     internal class HandActor
     {
         public string Name = "";
-        public Texture2D? Sheet;
+        public Texture2D? Sheet;          // fallback look
+        public Farmer? Body;              // farmer character used purely for drawing (not added to the game)
         public Color Tint = Color.White;
         public Vector2 Pos, Home;
         public int Dir;                    // 0 down, 1 right, 2 up, 3 left (NPC sheet rows)
@@ -65,7 +68,8 @@ public partial class ModEntry
             if (!actors.TryGetValue(name, out var a))
             {
                 a = new HandActor { Name = name, Tint = Tints[i % Tints.Length] };
-                a.Sheet = LoadHandSheet(i);
+                a.Body = MakeBody(name);
+                if (a.Body == null) a.Sheet = LoadHandSheet(i);
                 a.Home = a.Pos = HomeFor(i);
                 actors[name] = a;
             }
@@ -77,6 +81,45 @@ public partial class ModEntry
                 a.Current = null;
                 a.Activity = "resting";
             }
+        }
+    }
+
+    private static readonly int[] HairStyles = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24 };
+    private static readonly string[] HatIds = { "(H)17", "(H)14", "(H)5", "(H)3", "(H)10" };
+
+    /// <summary>Same name => same look, on every launch (string.GetHashCode isn't stable, so hash by hand).</summary>
+    private static int StableSeed(string s)
+    {
+        int h = 17;
+        foreach (char c in s) h = h * 31 + c;
+        return h;
+    }
+
+    private Farmer? MakeBody(string name)
+    {
+        try
+        {
+            var rng = new Random(StableSeed(name));
+            bool male = rng.Next(2) == 0;
+            var f = new Farmer(new FarmerSprite("Characters/Farmer/farmer_base"), Vector2.Zero, 1, name, new List<Item>(), male);
+            f.skin.Value = rng.Next(0, 6);
+            f.hair.Value = HairStyles[rng.Next(HairStyles.Length)];
+            f.hairstyleColor.Value = new Color(rng.Next(20, 230), rng.Next(10, 180), rng.Next(0, 130));
+            f.pantsColor.Value = new Color(rng.Next(30, 200), rng.Next(30, 200), rng.Next(30, 200));
+            var shirts = Helper.GameContent.Load<Dictionary<string, ShirtData>>("Data/Shirts").Keys.ToList();
+            if (shirts.Count > 0) f.changeShirt(shirts[rng.Next(shirts.Count)]);
+            if (rng.Next(3) > 0)
+            {
+                var hat = ItemRegistry.Create(HatIds[rng.Next(HatIds.Length)], 1, allowNull: true) as Hat;
+                if (hat != null) f.hat.Value = hat;
+            }
+            f.FarmerRenderer.MarkSpriteDirty();
+            return f;
+        }
+        catch (Exception e)
+        {
+            Monitor.Log($"Could not build a farmer body for hand '{name}' ({e.Message}); using a villager sprite.", LogLevel.Warn);
+            return null;
         }
     }
 
@@ -245,10 +288,16 @@ public partial class ModEntry
         {
             var local = Game1.GlobalToLocal(Game1.viewport, a.Pos);
             float depth = (a.Pos.Y + 64f) / 10000f;
-            b.Draw(Game1.shadowTexture, local + new Vector2(32, 60), null, Color.White, 0f,
+            float bobY = a.Current != null && !a.Moving ? (float)Math.Sin(Game1.ticks / 4.0) * 3f : 0f;
+
+            if (a.Body != null)
+            {
+                DrawBody(b, a, bobY);
+            }
+            else b.Draw(Game1.shadowTexture, local + new Vector2(32, 60), null, Color.White, 0f,
                 new Vector2(Game1.shadowTexture.Bounds.Center.X, Game1.shadowTexture.Bounds.Center.Y), 4f, SpriteEffects.None, depth - 0.0001f);
 
-            if (a.Sheet != null)
+            if (a.Body == null && a.Sheet != null)
             {
                 int col = a.Moving ? (int)(Game1.ticks / 8 % 4) : 0;
                 float bob = a.Current != null && !a.Moving ? (float)Math.Sin(Game1.ticks / 4.0) * 3f : 0f;
@@ -263,6 +312,22 @@ public partial class ModEntry
             var size = Game1.smallFont.MeasureString(label);
             Utility.drawTextWithShadow(b, label, Game1.smallFont, new Vector2(local.X + 32 - size.X / 2, local.Y - 100), color, 1f, depth + 0.001f);
         }
+    }
+
+    /// <summary>Pose and draw the farmer body: facing and walk frames come from the game's own walk cycles.</summary>
+    private void DrawBody(SpriteBatch b, HandActor a, float bobY)
+    {
+        var f = a.Body!;
+        int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 }; // sheet row -> Stardew facing (0 up, 1 right, 2 down, 3 left)
+        // Farmer sheet: 6 frames per row. Walk cycle = stand, step, stand, step2. Left reuses right, flipped.
+        int[] cycle = facing switch { 0 => new[] { 12, 13, 12, 14 }, 1 or 3 => new[] { 6, 7, 6, 8 }, _ => new[] { 0, 1, 0, 2 } };
+        int frame = cycle[a.Moving ? (int)(Game1.ticks / 6 % cycle.Length) : 0];
+
+        f.currentLocation = Game1.currentLocation;
+        f.Position = a.Pos + new Vector2(0, bobY);
+        f.FacingDirection = facing;
+        f.FarmerSprite.setCurrentSingleFrame(frame, 32000, false, facing == 3);
+        f.draw(b);
     }
 
     private HandActor? HandAt(Vector2 absolutePixels)
