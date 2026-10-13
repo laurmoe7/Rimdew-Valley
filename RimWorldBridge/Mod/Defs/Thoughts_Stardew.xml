@@ -129,7 +129,7 @@
     <stages><li>
       <label>valley life</label>
       <description>Life in the valley is peaceful. (Baseline mood boost for simulated villagers.)</description>
-      <baseMoodEffect>25</baseMoodEffect>
+      <baseMoodEffect>30</baseMoodEffect>
     </li></stages>
   </ThoughtDef>
 

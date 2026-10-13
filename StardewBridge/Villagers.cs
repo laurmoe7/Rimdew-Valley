@@ -60,7 +60,7 @@ public partial class ModEntry
         var moods = ((JArray)msg["npcs"]!).Select(n => (double)n["mood"]!).ToList();
         if (moods.Count > 0)
             Monitor.Log($"RimWorld finished the night. Village mood: avg {moods.Average():0.00}, " +
-                        $"{moods.Count(m => m >= 0.7)} happy, {moods.Count(m => m <= 0.3)} unhappy (rd_moods for details).", LogLevel.Info);
+                        $"{moods.Count(m => m >= 0.65)} happy, {moods.Count(m => m <= 0.25)} unhappy (rd_moods for details).", LogLevel.Info);
         npcBroken.Clear();
         foreach (var n in (JArray)msg["npcs"]!)
         {
@@ -79,8 +79,8 @@ public partial class ModEntry
             // Mood moves friendship once per day: happy villagers warm to you, unhappy ones drift away.
             if (Game1.player.friendshipData.ContainsKey(name))
             {
-                if (mood >= 0.7) Game1.player.changeFriendship(15, npc);
-                else if (mood <= 0.3) Game1.player.changeFriendship(brk ? -40 : -15, npc);
+                if (mood >= 0.65) Game1.player.changeFriendship(10, npc);
+                else if (mood <= 0.25) Game1.player.changeFriendship(brk ? -25 : -5, npc);
             }
         }
     }
