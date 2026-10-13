@@ -48,6 +48,73 @@ public partial class ModEntry
         Game1.activeClickableMenu = new StardewValley.Menus.CarpenterMenu(TestBuilder);
     }
 
+    /// <summary>Iridium Axe, Pickaxe, Hoe and Watering Can (added if missing), plus the other basic tools upgraded.</summary>
+    internal void MaxTools()
+    {
+        var p = Game1.player;
+        foreach (var id in new[] { "(T)Axe", "(T)Pickaxe", "(T)Hoe", "(T)WateringCan" })
+        {
+            var tool = p.Items.OfType<StardewValley.Tool>().FirstOrDefault(t => t.QualifiedItemId == id);
+            if (tool == null)
+            {
+                tool = (StardewValley.Tool)ItemRegistry.Create(id);
+                p.addItemByMenuIfNecessary(tool);
+            }
+            tool.UpgradeLevel = 4;   // iridium
+            if (tool is StardewValley.Tools.WateringCan can) can.WaterLeft = can.waterCanMax;
+        }
+        Hud("Axe, Pickaxe, Hoe and Watering Can are now Iridium.", HUDMessage.achievement_type);
+    }
+
+    internal void MaxBackpack()
+    {
+        var p = Game1.player;
+        if (p.MaxItems < 36) p.increaseBackpackSize(36 - p.MaxItems);
+        Hud("Backpack: 36 slots.", HUDMessage.achievement_type);
+    }
+
+    internal void MaxSkills()
+    {
+        var p = Game1.player;
+        for (int i = 0; i < 5; i++) p.experiencePoints[i] = 15000;
+        p.farmingLevel.Value = p.miningLevel.Value = p.foragingLevel.Value = p.fishingLevel.Value = p.combatLevel.Value = 10;
+        p.maxHealth = Math.Max(p.maxHealth, 200);
+        Hud("All skills at level 10.", HUDMessage.achievement_type);
+    }
+
+    internal void FullRestore()
+    {
+        var p = Game1.player;
+        p.health = p.maxHealth;
+        p.Stamina = p.MaxStamina;
+        Hud("Health and energy restored.", HUDMessage.achievement_type);
+    }
+
+    internal void AddMoney(int amount)
+    {
+        Game1.player.Money += amount;
+        Hud($"+{amount}g", HUDMessage.achievement_type);
+    }
+
+    internal void MaxFriendship()
+    {
+        foreach (var npc in Utility.getAllVillagers().Where(n => n.CanSocialize))
+            Game1.player.changeFriendship(2500, npc);
+        Hud("Friendship maxed with every villager.", HUDMessage.achievement_type);
+    }
+
+    internal void ClearMonsters()
+    {
+        int n = Game1.getFarm().characters.RemoveWhere(c => c is StardewValley.Monsters.Monster);
+        Hud($"Removed {n} monsters.", HUDMessage.achievement_type);
+    }
+
+    internal void SetTime(int time)
+    {
+        Game1.timeOfDay = time;
+        Hud($"It is now {time / 100}:{time % 100:00}.", HUDMessage.achievement_type);
+    }
+
     internal void GrowAllCrops()
     {
         int n = 0;

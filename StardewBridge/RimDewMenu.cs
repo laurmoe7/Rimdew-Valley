@@ -266,6 +266,9 @@ public class RimDewMenu : IClickableMenu
             ("Farm", new (string, Action)[] { ("Clear debris", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
                 ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit),
                 ("Place bunkhouse", mod.PlaceBunkhouse) }),
+            ("Player", new (string, Action)[] { ("Max tools", mod.MaxTools), ("36-slot backpack", mod.MaxBackpack), ("Max skills", mod.MaxSkills),
+                ("Full heal+energy", mod.FullRestore), ("+50,000g", () => mod.AddMoney(50000)), ("Max friendship", mod.MaxFriendship),
+                ("Clear monsters", mod.ClearMonsters), ("Time: 6pm", () => mod.SetTime(1800)) }),
             ("Monsters (local)", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
                 ("Weapons kit", mod.GiveWeaponsKit) }),
@@ -283,7 +286,7 @@ public class RimDewMenu : IClickableMenu
                 ("Cold snap", () => mod.FireRimWorldIncident("ColdSnap")) }),
         };
 
-        const int cols = 4, gap = 10, bh = 38;
+        const int cols = 5, gap = 8, bh = 38;
         int bw = (c.Width - gap * (cols - 1)) / cols;
         int y = c.Y;
         foreach (var (title, buttons) in sections)

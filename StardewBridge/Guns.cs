@@ -4,6 +4,7 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.GameData.Buildings;
+using StardewValley.GameData.Objects;
 using StardewValley.GameData.Weapons;
 using StardewValley.Projectiles;
 
@@ -73,6 +74,32 @@ public partial class ModEntry
                 free.BuildDays = 0;
                 free.BuildMaterials = new List<BuildingMaterial>();
                 data[BunkFreeId] = free;
+            });
+        }
+        else if (e.NameWithoutLocale.IsEquivalentTo("Data/Objects"))
+        {
+            e.Edit(asset =>
+            {
+                var data = asset.AsDictionary<string, ObjectData>().Data;
+                for (int i = 0; i < Guns.Length; i++)
+                {
+                    var g = Guns[i];
+                    data[GunPrefix + g.Id] = new ObjectData
+                    {
+                        Name = GunPrefix + g.Id,
+                        DisplayName = g.Name,
+                        Description = $"A {g.Name} from RimWorld. Hold left click to fire.",
+                        Type = "Basic",
+                        Category = 0,
+                        Price = 0,
+                        Texture = IconAsset,
+                        SpriteIndex = i,
+                        Edibility = -300,
+                        ExcludeFromShippingCollection = true,
+                        ExcludeFromRandomSale = true,
+                        ContextTags = new List<string> { "not_giftable" }
+                    };
+                }
             });
         }
         else if (e.NameWithoutLocale.IsEquivalentTo("Data/Weapons"))
@@ -187,7 +214,7 @@ public partial class ModEntry
 
     private void GiveGun(Gun g)
     {
-        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(W)" + GunPrefix + g.Id));
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)" + GunPrefix + g.Id));
     }
 
     internal void GiveGunById(string id) { var g = Guns.FirstOrDefault(x => x.Id == id); if (g != null) GiveGun(g); }
@@ -210,10 +237,10 @@ public partial class ModEntry
     /// (0 up, 1 right, 2 down, 3 left).</summary>
     private static Vector2 HandPosFor(Vector2 feet, int facing) => feet + facing switch
     {
-        1 => new Vector2(18, -34),
-        3 => new Vector2(-18, -34),
-        2 => new Vector2(14, -26),
-        _ => new Vector2(-14, -38)
+        1 => new Vector2(12, -22),
+        3 => new Vector2(-12, -22),
+        2 => new Vector2(12, -14),
+        _ => new Vector2(-12, -24)
     };
 
     private Vector2 HandPos()
@@ -267,7 +294,7 @@ public partial class ModEntry
         var sprite = LoadBulletSprite(gun);
         float length = gun.Bullet == "Bullet_Big" ? 44f : gun.Bullet == "Bullet_Shotgun" ? 24f : 32f;
         where.projectiles.Add(new GunBullet(sprite, length, dmg, (float)Math.Cos(angle) * gun.Speed, (float)Math.Sin(angle) * gun.Speed,
-            muzzle, withSound ? "slingshot" : "", where));
+            muzzle - new Vector2(32, 32), withSound ? "slingshot" : "", where));   // position is top-left; drawn at +32,+32
     }
 
     /// <summary>Better shooters get better guns.</summary>
@@ -333,7 +360,9 @@ public partial class ModEntry
     private void SuppressSwing(ButtonPressedEventArgs e)
     {
         if (Game1.activeClickableMenu != null || HeldGun() == null) return;
-        if (e.Button.IsUseToolButton() || e.Button.IsActionButton())
+        // New guns are plain objects (no swing, no special move), so right click still opens doors and talks to people.
+        // Guns made by an older version of this mod are swords: block their swing and special move.
+        if (Game1.player.CurrentItem?.QualifiedItemId.StartsWith("(W)") == true && (e.Button.IsUseToolButton() || e.Button.IsActionButton()))
             Helper.Input.Suppress(e.Button);
     }
 
@@ -361,5 +390,13 @@ public partial class ModEntry
         b.Draw(tex, Game1.GlobalToLocal(Game1.viewport, hand), null, Color.White,
             left ? angle + (float)Math.PI : angle, origin, scale,
             left ? SpriteEffects.FlipHorizontally : SpriteEffects.None, depth);
+
+        // A small fist over the grip so the gun reads as held.
+        if (facing != 0)
+        {
+            var local = Game1.GlobalToLocal(Game1.viewport, hand);
+            b.Draw(Game1.staminaRect, new Rectangle((int)local.X - 5, (int)local.Y - 5, 10, 10), null, new Color(232, 176, 136), 0f,
+                Vector2.Zero, SpriteEffects.None, depth + 0.0002f);
+        }
     }
 }
