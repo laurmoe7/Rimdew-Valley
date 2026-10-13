@@ -79,11 +79,12 @@ public partial class ModEntry
         Game1.player.health = Math.Max(1, Game1.player.health - hp);
     }
 
-    internal void SendMoodEventToAll(string kind)
+    internal void SendMoodEventToAll(params string[] kinds)
     {
         foreach (var npc in Utility.getAllVillagers().Where(n => n.CanSocialize))
-            SendNpcEvent(npc.Name, kind);
-        Hud($"Sent '{kind}' to every villager. Press 'Refresh RimWorld data' to see their mood.", HUDMessage.achievement_type);
+            foreach (var kind in kinds)
+                SendNpcEvent(npc.Name, kind);
+        Hud("Mood events sent to every villager. Press 'Refresh data', then open the Villagers tab.", HUDMessage.achievement_type);
     }
 
     internal void FireRimWorldIncident(string def) => Send(new JObject { ["type"] = "dev_incident", ["def"] = def });

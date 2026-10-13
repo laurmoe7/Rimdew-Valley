@@ -150,6 +150,10 @@ namespace RimDewBridge
         }
 
         // ---- villager mood ----
+        /// <summary>Instant mood target (baseline + all current thoughts). The visible bar eases toward this over game time,
+        /// which would look stale while the colony is paused between nights.</summary>
+        private static float Mood(Pawn p) { return p.needs.mood.CurInstantLevelPercentage; }
+
         private static string Pascal(string kind)
         {
             return string.Concat(kind.Split('_').Select(s => s.Length == 0 ? s : char.ToUpper(s[0]) + s.Substring(1)));
@@ -181,7 +185,7 @@ namespace RimDewBridge
             {
                 var p = kv.Value;
                 if (!kv.Key.StartsWith("npc:") || p == null || p.Dead || p.needs == null || p.needs.mood == null) continue;
-                float mood = p.needs.mood.CurLevelPercentage;
+                float mood = Mood(p);
                 bool brk = p.InMentalState;
                 list.Add(new Dictionary<string, object>
                 {
@@ -299,7 +303,7 @@ namespace RimDewBridge
             {
                 var p = kv.Value;
                 if (!kv.Key.StartsWith("hand:") || p == null || p.Dead || p.needs == null || p.needs.mood == null) continue;
-                float mood = p.needs.mood.CurLevelPercentage;
+                float mood = Mood(p);
                 bool able = !p.Downed && !p.InMentalState;
                 hands.Add(new Dictionary<string, object>
                 {
@@ -326,7 +330,7 @@ namespace RimDewBridge
                 var p = kv.Value;
                 string name = kv.Key.Substring(5);
                 if (p == null || p.Dead) continue;
-                float mood = p.needs.mood.CurLevelPercentage;
+                float mood = Mood(p);
                 int plants = p.skills.GetSkill(SkillDefOf.Plants).Level;
                 int animals = p.skills.GetSkill(SkillDefOf.Animals).Level;
                 bool able = !p.Downed && !p.InMentalState;
