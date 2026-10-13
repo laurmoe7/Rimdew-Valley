@@ -17,7 +17,7 @@ namespace RimDewBridge
     public class BridgeComponent : GameComponent
     {
         public static BridgeComponent Instance;
-        private const int TicksPerDay = 60000;
+        private const int TicksPerDay = 20000; // a third of a RimWorld day keeps the nightly sim to a few seconds
         private const int TicksPerFrame = 3000;
 
         private HubClient hub;
@@ -68,8 +68,10 @@ namespace RimDewBridge
 
             if (ticksLeft > 0)
             {
-                int n = Math.Min(ticksLeft, TicksPerFrame);
-                for (int i = 0; i < n; i++) Find.TickManager.DoSingleTick();
+                // Tick for up to ~60 ms per frame so the (hidden) window never locks up.
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                int n = 0;
+                while (n < ticksLeft && n < TicksPerFrame && sw.ElapsedMilliseconds < 60) { Find.TickManager.DoSingleTick(); n++; }
                 ticksLeft -= n;
                 if (ticksLeft == 0) FinishDay();
             }
@@ -241,6 +243,7 @@ namespace RimDewBridge
                 if (p == null || p.Dead || p.needs == null) continue;
                 if (p.needs.food != null) p.needs.food.CurLevel = Mathf.Max(p.needs.food.CurLevel, 0.8f);
                 if (p.needs.rest != null) p.needs.rest.CurLevel = Mathf.Max(p.needs.rest.CurLevel, 0.9f);
+                GainThought(p, "valley_life"); // offsets the gloom of standing on a bare map; see Thoughts_Stardew.xml
                 if (kv.Key.StartsWith("npc:") && bad) GainThought(p, "bad_weather");
                 if (kv.Key.StartsWith("hand:")) GainThought(p, paid ? "paid" : "unpaid");
             }

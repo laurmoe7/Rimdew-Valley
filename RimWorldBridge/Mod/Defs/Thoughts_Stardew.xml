@@ -3,7 +3,7 @@
 
   <ThoughtDef>
     <defName>SD_GiftLoved</defName>
-    <durationDays>3</durationDays>
+    <durationDays>1</durationDays>
     <stackLimit>3</stackLimit>
     <stages><li>
       <label>loved gift</label>
@@ -14,7 +14,7 @@
 
   <ThoughtDef>
     <defName>SD_GiftLiked</defName>
-    <durationDays>2</durationDays>
+    <durationDays>0.67</durationDays>
     <stackLimit>3</stackLimit>
     <stages><li>
       <label>liked gift</label>
@@ -25,7 +25,7 @@
 
   <ThoughtDef>
     <defName>SD_GiftDisliked</defName>
-    <durationDays>2</durationDays>
+    <durationDays>0.67</durationDays>
     <stackLimit>2</stackLimit>
     <stages><li>
       <label>disliked gift</label>
@@ -36,7 +36,7 @@
 
   <ThoughtDef>
     <defName>SD_GiftHated</defName>
-    <durationDays>4</durationDays>
+    <durationDays>1.33</durationDays>
     <stackLimit>2</stackLimit>
     <stages><li>
       <label>hated gift</label>
@@ -47,7 +47,7 @@
 
   <ThoughtDef>
     <defName>SD_Talked</defName>
-    <durationDays>1.5</durationDays>
+    <durationDays>0.5</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
       <label>chatted with the farmer</label>
@@ -58,7 +58,7 @@
 
   <ThoughtDef>
     <defName>SD_Festival</defName>
-    <durationDays>3</durationDays>
+    <durationDays>1</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
       <label>town festival</label>
@@ -69,7 +69,7 @@
 
   <ThoughtDef>
     <defName>SD_Birthday</defName>
-    <durationDays>2</durationDays>
+    <durationDays>0.67</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
       <label>birthday</label>
@@ -80,7 +80,7 @@
 
   <ThoughtDef>
     <defName>SD_BadWeather</defName>
-    <durationDays>1</durationDays>
+    <durationDays>0.33</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
       <label>miserable weather</label>
@@ -91,7 +91,7 @@
 
   <ThoughtDef>
     <defName>SD_Paid</defName>
-    <durationDays>1</durationDays>
+    <durationDays>0.33</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
       <label>paid for the day</label>
@@ -102,7 +102,7 @@
 
   <ThoughtDef>
     <defName>SD_Unpaid</defName>
-    <durationDays>3</durationDays>
+    <durationDays>1</durationDays>
     <stackLimit>3</stackLimit>
     <stages><li>
       <label>unpaid wages</label>
@@ -113,12 +113,23 @@
 
   <ThoughtDef>
     <defName>SD_Raided</defName>
-    <durationDays>2</durationDays>
+    <durationDays>0.67</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
       <label>farm under attack</label>
       <description>Monsters are attacking the valley.</description>
       <baseMoodEffect>-5</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_ValleyLife</defName>
+    <durationDays>1</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>valley life</label>
+      <description>Life in the valley is peaceful. (Baseline mood boost for simulated villagers.)</description>
+      <baseMoodEffect>25</baseMoodEffect>
     </li></stages>
   </ThoughtDef>
 

@@ -57,6 +57,10 @@ public partial class ModEntry
 
     private void OnNpcState(JObject msg)
     {
+        var moods = ((JArray)msg["npcs"]!).Select(n => (double)n["mood"]!).ToList();
+        if (moods.Count > 0)
+            Monitor.Log($"RimWorld finished the night. Village mood: avg {moods.Average():0.00}, " +
+                        $"{moods.Count(m => m >= 0.7)} happy, {moods.Count(m => m <= 0.3)} unhappy (rd_moods for details).", LogLevel.Info);
         npcBroken.Clear();
         foreach (var n in (JArray)msg["npcs"]!)
         {
