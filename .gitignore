@@ -3,3 +3,5 @@ obj/
 __pycache__/
 *.pyc
 RimWorldBridge/Mod/Assemblies/
+launcher.log
+hub/hub.log

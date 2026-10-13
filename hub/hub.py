@@ -142,5 +142,10 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    import os
+    import sys
+    handlers = [logging.FileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), "hub.log"), mode="w")]
+    if sys.stderr is not None:  # pythonw (no console) has no stderr
+        handlers.append(logging.StreamHandler())
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", handlers=handlers)
     asyncio.run(main())

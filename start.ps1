@@ -1,10 +1,11 @@
+Start-Transcript -Path "$PSScriptRoot\launcher.log" -Force | Out-Null
 # Starts the RimDew stack: relay hub, RimWorld (hidden sim), then Stardew via SMAPI.
 $root = $PSScriptRoot
 $stardew = "C:\Program Files (x86)\Steam\steamapps\common\Stardew Valley"
 
 # 1. Hub (skip if something is already listening on 7777)
 if (-not (Get-NetTCPConnection -LocalPort 7777 -State Listen -ErrorAction SilentlyContinue)) {
-    Start-Process python -ArgumentList "`"$root\hub\hub.py`"" -WindowStyle Minimized
+    Start-Process pythonw -ArgumentList "`"$root\hub\hub.py`"" -WindowStyle Hidden
     Write-Host "Hub started."
 } else {
     Write-Host "Hub already running."
@@ -24,7 +25,7 @@ $t = 0
 while (-not (Get-NetTCPConnection -RemotePort 7777 -State Established -ErrorAction SilentlyContinue) -and $t -lt 240) {
     Start-Sleep 3; $t += 3
 }
-if ($t -ge 240) { Write-Host "RimWorld didn't connect in time. Load your colony manually, then press Enter."; Read-Host }
+if ($t -ge 240) { Write-Host "RimWorld did not connect in 4 minutes; launching Stardew anyway (see launcher.log)." }
 
 Add-Type @"
 using System; using System.Runtime.InteropServices;
@@ -48,3 +49,5 @@ if (-not (Get-Process "StardewModdingAPI" -ErrorAction SilentlyContinue)) {
     if ($sv) { [Win]::SetForegroundWindow($sv.MainWindowHandle) | Out-Null }
 }
 Write-Host "Done. Play Stardew; RimWorld is running minimized in the background."
+
+Stop-Transcript | Out-Null
