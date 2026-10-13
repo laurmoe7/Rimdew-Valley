@@ -205,10 +205,12 @@ public partial class ModEntry
         }
     }
 
-    /// <summary>Stop left click from swinging the (placeholder) sword while a gun is held.</summary>
+    /// <summary>The gun is a placeholder sword, so block both its swing (use-tool button) and its right-click special
+    /// move (the action button, which starts a defensive swing and would leave the farmer stuck).</summary>
     private void SuppressSwing(ButtonPressedEventArgs e)
     {
-        if (e.Button == SButton.MouseLeft && Game1.activeClickableMenu == null && HeldGun() != null)
+        if (Game1.activeClickableMenu != null || HeldGun() == null) return;
+        if (e.Button.IsUseToolButton() || e.Button.IsActionButton())
             Helper.Input.Suppress(e.Button);
     }
 
