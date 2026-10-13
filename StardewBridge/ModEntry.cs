@@ -48,6 +48,8 @@ public partial class ModEntry : Mod
         helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
         helper.Events.GameLoop.GameLaunched += (_, _) => DevDump();
+        try { new HarmonyLib.Harmony(ModManifest.UniqueID).PatchAll(typeof(ModEntry).Assembly); }
+        catch (Exception e) { Monitor.Log($"Could not patch Farmer.IsCarrying (guns may show a carry pose): {e.Message}", LogLevel.Warn); }
         RegisterCommands();
     }
 
