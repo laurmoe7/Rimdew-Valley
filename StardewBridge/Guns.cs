@@ -400,6 +400,9 @@ public partial class ModEntry
         if (gun == null) return;
         var c = Game1.player.StandingPixel;
         DrawGunSprite(e.SpriteBatch, gun, HandPos(), AimAngle(), Game1.player.FacingDirection, c.Y, lastShotTick);
+        // Mods draw after the whole world in a separate pass, so a depth value can't put the gun behind the farmer. Facing away,
+        // draw the farmer again on top instead: the body covers the gun and only the part sticking out remains visible.
+        if (Game1.player.FacingDirection == 0) Game1.player.draw(e.SpriteBatch);
     }
 
     /// <summary>Draw a gun in a hand, aimed along <paramref name="angle"/>. Works for the player and for farmhands.</summary>
