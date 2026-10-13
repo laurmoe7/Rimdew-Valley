@@ -15,7 +15,9 @@ log = logging.getLogger("hub")
 # game name -> StreamWriter
 clients: dict[str, asyncio.StreamWriter] = {}
 last_seen: dict[str, float] = {}
-HEARTBEAT_TIMEOUT = 5.0
+HEARTBEAT_TIMEOUT = 15.0
+OFFLINE_TTL = 600.0  # seconds a message waits for a disconnected game
+pending: dict[str, list] = {"stardew": [], "rimworld": []}  # (time, msg)
 state = {"day": None, "season": None, "year": None}
 
 
@@ -70,6 +72,12 @@ def translate(src: str, msg: dict) -> dict | None:
 async def send(game: str, msg: dict) -> None:
     w = clients.get(game)
     if w is None:
+        # Game briefly offline (e.g. Stardew saving): hold real data for when it reconnects.
+        if msg.get("type") not in ("welcome", "peer_status"):
+            now = asyncio.get_running_loop().time()
+            q = pending[game]
+            q.append((now, msg))
+            del q[:-200]
         return
     w.write((json.dumps(msg) + "\n").encode())
     await w.drain()
@@ -91,6 +99,11 @@ async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
                 last_seen[game] = asyncio.get_running_loop().time()
                 log.info("%s connected", game)
                 await send(game, {"type": "welcome", "peer_online": other(game) in clients})
+                now = asyncio.get_running_loop().time()
+                backlog, pending[game] = pending[game], []
+                for t, m in backlog:
+                    if now - t <= OFFLINE_TTL:
+                        await send(game, m)
                 await send(other(game), {"type": "peer_status", "online": True})
                 continue
             if game is None:

@@ -55,9 +55,18 @@ public class HubClient : IDisposable
                 }) { IsBackground = true };
                 reader.Start();
 
+                var lastBeat = DateTime.UtcNow;
                 while (!cts.IsCancellationRequested && reader.IsAlive)
-                    if (outbox.TryTake(out var line, 500))
+                {
+                    if (outbox.TryTake(out var line, 250))
                         writer.WriteLine(line);
+                    // Heartbeat comes from this thread so a long save (game thread frozen) doesn't drop us.
+                    if ((DateTime.UtcNow - lastBeat).TotalSeconds >= 1)
+                    {
+                        writer.WriteLine("{\"type\":\"heartbeat\"}");
+                        lastBeat = DateTime.UtcNow;
+                    }
+                }
             }
             catch { }
             if (Connected) log("Disconnected from hub; retrying.");

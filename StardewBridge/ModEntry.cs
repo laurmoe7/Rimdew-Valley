@@ -109,7 +109,6 @@ public partial class ModEntry : Mod
 
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
-        if (e.IsMultipleOf(60)) hub.Send(new JObject { ["type"] = "heartbeat" });
         if (!Context.IsWorldReady) return;
 
         TickVillagers(e);

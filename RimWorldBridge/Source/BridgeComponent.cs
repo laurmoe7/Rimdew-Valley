@@ -112,8 +112,9 @@ namespace RimDewBridge
             }
             var map = Find.AnyPlayerHomeMap;
             if (map == null) return null;
-            p = PawnGenerator.GeneratePawn(PawnKindDefOf.Colonist, Faction.OfPlayer);
-            p.Name = new NameSingle(name);
+            p = PawnGenerator.GeneratePawn(new PawnGenerationRequest(PawnKindDefOf.Colonist, Faction.OfPlayer,
+                PawnGenerationContext.NonPlayer, -1, forceGenerateNewPawn: true, canGeneratePawnRelations: false));
+            p.Name = new NameTriple(name, name, "");
             GenSpawn.Spawn(p, CellFinder.RandomClosewalkCellNear(map.Center, map, 15), map);
             if (p.drafter != null) p.drafter.Drafted = true; // stand still; no jobs, no wandering
             pawns[key] = p;
