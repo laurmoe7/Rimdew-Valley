@@ -166,7 +166,7 @@ public partial class ModEntry
         {
             string name = (string)h["name"]!;
             if (!actors.TryGetValue(name, out var actor)) continue;
-            int nWater = (int?)h["water"] ?? 0, nHarvest = (int?)h["harvest"] ?? 0, nFeed = (int?)h["animals"] ?? 0;
+            int nWater = (int?)h["did_water"] ?? 0, nHarvest = (int?)h["did_harvest"] ?? 0, nFeed = (int?)h["did_feed"] ?? 0;
 
             foreach (var c in PickNearest(dry, nWater, actor.Pos, x => x.tile * 64f))
             { actor.Jobs.Enqueue(new HandJob { Kind = "water", Tile = c.tile }); totalJobs++; }

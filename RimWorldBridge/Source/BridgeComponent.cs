@@ -329,7 +329,7 @@ namespace RimDewBridge
                 {
                     { "name", name }, { "mood", Math.Round(mood, 2) }, { "plants", plants }, { "animals", animals },
                     { "hours", Math.Round(workedHours, 1) },
-                    { "water", (int)mine["water"] }, { "harvest", (int)mine["harvest"] }, { "animals", (int)mine["animals"] },
+                    { "did_water", (int)mine["water"] }, { "did_harvest", (int)mine["harvest"] }, { "did_feed", (int)mine["animals"] },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
                 });
             }
