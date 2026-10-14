@@ -278,7 +278,16 @@ public partial class ModEntry
         }
 
         internal static Action<string>? Debug;
-        public override void behaviorOnCollisionWithOther(GameLocation location) { Debug?.Invoke($"hit OTHER at {position.X / 64:0.00},{position.Y / 64:0.00}"); base.behaviorOnCollisionWithOther(location); }
+        public override void behaviorOnCollisionWithOther(GameLocation location)
+        {
+            // sandbags are low cover: bullets fly over them
+            var box = getBoundingBox();
+            for (int x = box.Left / 64; x <= box.Right / 64; x++)
+                for (int y = box.Top / 64; y <= box.Bottom / 64; y++)
+                    if (location.objects.TryGetValue(new Vector2(x, y), out var o) && !o.bigCraftable.Value && o.ItemId == "laurm.RimPower_Sandbags") return;
+            Debug?.Invoke($"hit OTHER at {position.X / 64:0.00},{position.Y / 64:0.00}");
+            base.behaviorOnCollisionWithOther(location);
+        }
         public override void behaviorOnCollisionWithTerrainFeature(StardewValley.TerrainFeatures.TerrainFeature t, Vector2 tileLocation, GameLocation location) { Debug?.Invoke($"hit TERRAIN {t.GetType().Name} at {tileLocation}"); base.behaviorOnCollisionWithTerrainFeature(t, tileLocation, location); }
         public override void behaviorOnCollisionWithMonster(StardewValley.NPC n, GameLocation location) { Debug?.Invoke($"hit MONSTER {n.Name} hp={(n as Monster)?.Health}"); base.behaviorOnCollisionWithMonster(n, location); Debug?.Invoke($"  -> hp={(n as Monster)?.Health}"); }
         public override void behaviorOnCollisionWithPlayer(GameLocation location, Farmer player) { Debug?.Invoke("hit PLAYER"); base.behaviorOnCollisionWithPlayer(location, player); }

@@ -4,6 +4,7 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Menus;
 using StardewValley.Monsters;
+using StardewValley.Objects;
 using SObject = StardewValley.Object;
 
 namespace StardewBridge;
@@ -67,27 +68,32 @@ public partial class ModEntry
 
     private void Pt(string msg) => Monitor.Log("[powertest] " + msg, LogLevel.Alert);
 
-    private SObject? PlaceTest(Microsoft.Xna.Framework.Vector2 tile, string id)
+    private SObject? PlaceTest(Vector2 tile, string id, bool big = true)
     {
         var farm = Game1.getFarm();
         farm.objects.Remove(tile);
         farm.terrainFeatures.Remove(tile);
-        var o = (SObject)ItemRegistry.Create("(BC)" + PId(id));
+        var o = (SObject)ItemRegistry.Create((big ? "(BC)" : "(O)") + PId(id));
         o.TileLocation = tile;
+        o.modData[TestKey] = "1";   // tagged so a save made mid-test is cleaned on the next load
         farm.objects[tile] = o;
         return o;
     }
 
+    private int ptShots0, pendingExplosiveSlime;
+
+    /// <summary>Scenario: a hand must fetch wood and ore from a chest to power and arm a turret; then slimes attack across
+    /// sandbags and traps.</summary>
     private void TickPowerTest(UpdateTickedEventArgs e)
     {
         if (!powerTest || !Context.IsWorldReady) return;
-        if (ptStart < 0) { ptStart = (int)e.Ticks; Pt("world ready"); GunBullet.Debug = m => Pt("  bullet: " + m); }
+        if (ptStart < 0) { ptStart = (int)e.Ticks; Pt("world ready"); GunBullet.Debug = m => { if (!m.StartsWith("hit OTHER")) Pt("  bullet: " + m); }; }
         int t = (int)e.Ticks - ptStart - 90;   // first 90 ticks: warp to the farm
         if (t == -80) Game1.warpFarmer("Farm", 76, 20, 2);
         if (t < 0) return;
         var farm = Game1.getFarm();
         var door = farm.GetMainFarmHouseEntry();
-        float x = door.X + 6, y = door.Y - 2;
+        float x = door.X + 6, y = door.Y - 2;   // open ground east of the farmhouse
         try
         {
             if (t == 60)
@@ -95,47 +101,57 @@ public partial class ModEntry
                 Game1.timeOfDay = 1200;
                 Game1.player.Position = new Vector2((x + 5) * 64, (y + 3) * 64);
                 var gen = PlaceTest(new Vector2(x, y), "WoodGenerator")!;
-                SetD(gen, FuelKey, 6);
+                SetD(gen, FuelKey, 0);                       // empty: a hand has to refuel it
                 PlaceTest(new Vector2(x + 1, y), "PowerBattery");
-                PlaceTest(new Vector2(x + 2, y), "SolarPanel");
                 PlaceTest(new Vector2(x + 3, y), "PowerPole");
-                PlaceTest(new Vector2(x + 9, y), "MiniTurret");
-                PlaceTest(new Vector2(x + 9, y + 12), "MiniTurret");   // out of range of the pole: must stay offline
-                Pt($"placed grid at {x},{y}; powered turret at {x + 9},{y}; isolated turret at {x + 9},{y + 12}");
+                var tur = PlaceTest(new Vector2(x + 9, y), "MiniTurret")!;
+                SetD(tur, AmmoKey, 0);                       // empty: a hand has to reload it
+                // supply chest with wood and ore
+                var chestTile = new Vector2(x - 3, y);
+                farm.objects.Remove(chestTile);
+                var chest = new Chest(true, chestTile);
+                chest.modData[TestKey] = "1";
+                chest.Items.Add(ItemRegistry.Create("(O)388", 20));
+                chest.Items.Add(ItemRegistry.Create("(O)378", 40));
+                farm.objects[chestTile] = chest;
+                // defences in the slimes' path
+                for (int k = 0; k < 4; k++) PlaceTest(new Vector2(x + 9 + (k - 1), y + 2), "Sandbags", false);
+                PlaceTest(new Vector2(x + 10, y + 4), "SpikeTrap", false);
+                PlaceTest(new Vector2(x + 7, y + 4), "ExplosiveTrap", false);
+                data.Hands.Add("TestPwr");
+                SyncHands(true);
+                Pt($"placed grid at {x},{y}; chest at {chestTile.X},{chestTile.Y}; turret ammo 0, generator fuel 0; hand TestPwr hired");
             }
-            if (t >= 120 && t % 60 == 0 && t < 1500) PtLog(t);
-            if (t == 180)
+            if (t >= 120 && t % 90 == 0 && t < 2400) PtLog(t);
+            if (t == 1200)
             {
-                ptKills0 = turretShots;
+                var gen = farm.objects[new Vector2(x, y)];
+                var tur = farm.objects[new Vector2(x + 9, y)];
+                Pt($"AFTER HAND WORK: fuel={GetD(gen, FuelKey):0.0}h ammo={GetD(tur, AmmoKey):0} defenseLog=[{string.Join("; ", Defenses)}]");
+                if (GetD(gen, FuelKey) <= 0 || GetD(tur, AmmoKey) <= 0) Pt("FAIL: hand did not service the grid");
+                ptShots0 = turretShots;
+                shotRequest = "defense_setup";
+                // slimes arrive from the south, through traps and past the sandbags
                 for (int i = 0; i < 4; i++)
-                    farm.characters.Add(new GreenSlime(new Vector2((x + 9 + (i - 2) * 1.5f) * 64, (y + 3 + (i % 2)) * 64), 0));
-                for (int i = 0; i < 2; i++)
-                    farm.characters.Add(new GreenSlime(new Vector2((x + 8 + i) * 64, (y + 17) * 64), 0));   // near the unpowered turret
-                Pt("spawned 4 slimes near the powered turret and 2 near the isolated one");
+                    farm.characters.Add(new GreenSlime(new Vector2((x + 8 + i * 1.5f) * 64, (y + 5) * 64), 0));
+                farm.characters.Add(new GreenSlime(new Vector2((x + 10) * 64, (y + 4) * 64), 0));   // stands on the spike trap
+                Pt("spawned 4 slimes in front of the sandbags and 1 on the spike trap");
+                pendingExplosiveSlime = (int)e.Ticks + 240;
             }
-            if (t >= 244 && t <= 275)
-                Pt($"  t={t} bullets=" + string.Join(" ", farm.projectiles.Select(p => $"({p.position.X / 64:0.00},{p.position.Y / 64:0.00} v={p.xVelocity.Value:0},{p.yVelocity.Value:0})")));
-            if (t >= 244 && t <= 248)
-                Pt($"  boxes t={t}: bullets=" + string.Join(" ", farm.projectiles.Select(p => p.getBoundingBox().ToString())) + " monsters=" + string.Join(" ", farm.characters.OfType<Monster>().Take(4).Select(m => m.Name + m.GetBoundingBox() + "hp" + m.Health + (m.IsInvisible ? "INV" : ""))));
-            if (t == 244)
-                for (int yy = 12; yy <= 20; yy++)
-                {
-                    var tl = new Vector2(79, yy);
-                    Pt($"  tile 79,{yy}: obj={(farm.objects.TryGetValue(tl, out var oo) ? oo.Name : "-")} terrain={(farm.terrainFeatures.TryGetValue(tl, out var tf) ? tf.GetType().Name : "-")} passable={farm.isTilePassable(tl)}");
-                }
-            if (t == 300) shotRequest = "turret_day";
-            if (t == 1000) shotRequest = "turret_night";
-            if (t == 900)
+            if (pendingExplosiveSlime > 0 && (int)e.Ticks >= pendingExplosiveSlime)
             {
-                Game1.timeOfDay = 2200;   // night: solar should be 0, generator/battery carry the grid
-                Pt("time set to 22:00");
+                pendingExplosiveSlime = 0;
+                farm.characters.Add(new GreenSlime(new Vector2((x + 7) * 64, (y + 4) * 64), 0));   // steps on the explosive trap
+                Pt("slime placed on the explosive trap");
             }
-            if (t == 1500)
+            if (t == 1500) shotRequest = "defense_fight";
+            if (t == 2400)
             {
                 var mons = farm.characters.OfType<Monster>().ToList();
-                var tur = pNodes.Values.Where(n => n.Kind == "Turret").Select(n => $"{n.Tile.X},{n.Tile.Y}:{(n.Online ? "online" : "offline")}");
-                Pt($"RESULT turretShots={turretShots - ptKills0} monstersLeft={mons.Count} turrets=[{string.Join(" ", tur)}]");
-                Pt("done. nothing was saved.");
+                var sb = farm.objects.Pairs.Count(kv => IsSandbag(kv.Value));
+                Pt($"RESULT turretShots={turretShots - ptShots0} monstersLeft={mons.Count} sandbagsLeft={sb} defenseLog=[{string.Join("; ", Defenses)}]");
+                Pt("done. cleaning up test objects; nothing was saved.");
+                CleanTestObjects();
                 farm.characters.RemoveWhere(c => c is Monster);
                 powerTest = false;
             }
@@ -147,8 +163,8 @@ public partial class ModEntry
     {
         var g = grids.Select(g => $"[{g.Nodes}n sup={g.Supply:0}W use={g.Demand:0}W bat={g.Charge:0}/{g.Capacity:0} sat={g.Satisfaction:0.00}]");
         var gen = pNodes.Values.FirstOrDefault(n => n.Kind == "Generator");
-        Pt($"t={t} time={Game1.timeOfDay} sun={Daylight():0.00} grids={string.Join(" ", g)} fuel={(gen != null ? GetD(gen.Obj, FuelKey) : -1):0.00}h shots={turretShots - ptKills0} monsters={Game1.getFarm().characters.OfType<Monster>().Count()} projectiles={Game1.getFarm().projectiles.Count}"
-            + (t is >= 240 and <= 360 ? " hp=[" + string.Join(",", Game1.getFarm().characters.OfType<Monster>().Select(m => $"{m.Health}@{m.Tile.X:0},{m.Tile.Y:0}")) + "]"
-                + " proj=[" + string.Join(" ", Game1.getFarm().projectiles.Take(3).Select(p => $"{p.position.X / 64:0.0},{p.position.Y / 64:0.0}")) + "]" : ""));
+        var tur = pNodes.Values.FirstOrDefault(n => n.Kind == "Turret");
+        string hands = string.Join(",", actors.Values.Select(a => $"{a.Name}:{a.Activity}@{a.Pos.X / 64:0.0},{a.Pos.Y / 64:0.0}" + (a.Current != null ? $"[job={a.Current.Kind} fetched={a.Current.Fetched} stand={StandSpot(a.Current) / 64f} walkable={Walkable(ToTile(StandSpot(a.Current)))} path={(a.Path == null ? "null" : a.PathIdx + "/" + a.Path.Count)} goal={a.PathGoal} unreach={a.Unreachable} partial={a.PathPartial} timer={a.WorkTimer}]" : "")));
+        Pt($"t={t} grids={string.Join(" ", g)} fuel={(gen != null ? GetD(gen.Obj, FuelKey) : -1):0.0}h ammo={(tur != null ? GetD(tur.Obj, AmmoKey) : -1):0} hands=[{hands}] shots={turretShots - ptShots0} monsters={Game1.getFarm().characters.OfType<Monster>().Count()}");
     }
 }

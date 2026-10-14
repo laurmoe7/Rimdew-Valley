@@ -316,7 +316,7 @@ public class RimDewMenu : IClickableMenu
         {
             ("Farm", new (string, Action)[] { ("Clear debris", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
                 ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit),
-                ("Place bunkhouse", mod.PlaceBunkhouse) }),
+                ("Place bunkhouse", mod.PlaceBunkhouse), ("Power kit", mod.GivePowerKit), ("Defense kit", mod.GiveDefenseKit) }),
             ("Player", new (string, Action)[] { ("Max tools", mod.MaxTools), ("36-slot backpack", mod.MaxBackpack), ("Max skills", mod.MaxSkills),
                 ("Full heal+energy", mod.FullRestore), ("+50,000g", () => mod.AddMoney(50000)), ("Max friendship", mod.MaxFriendship),
                 ("Clear monsters", mod.ClearMonsters), ("Time: 6pm", () => mod.SetTime(1800)) }),

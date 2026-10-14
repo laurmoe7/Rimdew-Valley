@@ -20,6 +20,8 @@ public partial class ModEntry
     private const float LinkRange = 3.5f, PoleRange = 9f;
     private const double GeneratorWatts = 1000, SolarPeakWatts = 500, TurretWatts = 100, BatteryCapWh = 2000;
     private const double HoursPerWood = 4, MaxFuelHours = 24;
+    private const double AmmoPerOre = 10, MaxAmmo = 100;
+    private const string AmmoKey = "laurm.RimPower/ammo", TestKey = "laurm.RimPower/test";
     private const string FuelKey = "laurm.RimPower/fuel", ChargeKey = "laurm.RimPower/charge";
 
     private record PowerItem(string Id, string Name, string Description, string Recipe, string RecipeIngredients);
@@ -30,13 +32,14 @@ public partial class ModEntry
         new("WoodGenerator", "Wood Generator", "Burns wood for 1000 W. Right click with wood to refuel (4 h each).",  "Wood Generator", "335 5 390 20 334 2"),
         new("SolarPanel",    "Solar Panel",    "Up to 500 W in daylight; much less in rain.",                          "Solar Panel",    "335 3 334 5 338 3"),
         new("PowerBattery",  "Battery",        "Stores 2000 Wh. Smooths out day and night.",                           "Battery",        "335 2 334 5 388 10"),
-        new("MiniTurret",    "Mini-Turret",    "Shoots monsters on its own. Needs 100 W.",                             "Mini-Turret",    "335 5 334 3 390 10"),
+        new("MiniTurret",    "Mini-Turret",    "Shoots monsters on its own. Needs 100 W and copper ore as ammo (10 shots each, holds 100).",                             "Mini-Turret",    "335 5 334 3 390 10"),
     };
 
-    private static readonly HashSet<string> PowerRecipeNames = PowerItems.Select(p => p.Recipe).ToHashSet();
+    private static readonly HashSet<string> PowerRecipeNames = PowerItems.Select(p => p.Recipe).Concat(DefItems.Select(d => d.Recipe)).ToHashSet();
 
     private static string PId(string shortId) => PowerPrefix + shortId;
     private static bool IsPowerObject(SObject o) => o.bigCraftable.Value && o.ItemId.StartsWith(PowerPrefix);
+    private static bool IsRimObject(SObject o) => o.ItemId.StartsWith(PowerPrefix);
 
     private class PNode
     {
@@ -69,6 +72,7 @@ public partial class ModEntry
     // ---------- content ----------
     private void PowerAssets(AssetRequestedEventArgs e)
     {
+        DefenseAssets(e);
         if (e.NameWithoutLocale.IsEquivalentTo("Data/BigCraftables"))
         {
             e.Edit(asset =>
@@ -109,7 +113,8 @@ public partial class ModEntry
         foreach (var p in PowerItems)
             Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(BC)" + PId(p.Id), p.Id == "PowerPole" ? 6 : 1));
         Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)388", 50));
-        Hud("Power kit: pole x6, generator, solar panel, battery, mini-turret, 50 wood.", HUDMessage.achievement_type);
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)378", 50));
+        Hud("Power kit: pole x6, generator, solar, battery, mini-turret, 50 wood, 50 copper ore.", HUDMessage.achievement_type);
     }
 
     // ---------- procedural sprites (16x32 cells in a row) ----------
@@ -303,6 +308,7 @@ public partial class ModEntry
             lastPowerScan = (int)e.Ticks;
         }
         TickTurrets((int)e.Ticks);
+        TickDefense((int)e.Ticks);
     }
 
     // ---------- turrets ----------
@@ -317,7 +323,7 @@ public partial class ModEntry
             if (n.Kind != "Turret") continue;
             var head = TurretHead(n);
             n.Target = null;
-            if (!n.Online || monsters.Count == 0) continue;
+            if (!n.Online || monsters.Count == 0 || GetD(n.Obj, AmmoKey) < 1) continue;
 
             Monster? best = null; float bestD = range;
             foreach (var m in monsters)
@@ -347,6 +353,7 @@ public partial class ModEntry
             for (int k = 0; k < 16 && own.Contains(muzzle.ToPoint()); k++) muzzle += dir * 8f;
             SpawnBullet(farm, TurretGun, muzzle, a, Game1.random.Next(TurretGun.MinDmg, TurretGun.MaxDmg + 1), false);
             PlayGunShot(TurretGun, head);
+            SetD(n.Obj, AmmoKey, GetD(n.Obj, AmmoKey) - 1);
             turretShots++;
         }
     }
@@ -360,12 +367,23 @@ public partial class ModEntry
     {
         if (!Context.IsPlayerFree || !e.Button.IsActionButton()) return;
         var tile = e.Cursor.GrabTile;
-        if (!Game1.currentLocation.objects.TryGetValue(tile, out var o) || !IsPowerObject(o)) return;
-        if (Vector2.Distance(Game1.player.Tile, tile) > 4) return;
-        string kind = KindOf(o);
+        bool pickup = Helper.Input.IsDown(SButton.LeftShift) || Helper.Input.IsDown(SButton.RightShift);
+        if (!Game1.currentLocation.objects.TryGetValue(tile, out var o) || !IsRimObject(o) || (IsTrap(o) && !pickup)) return;
+        if (Vector2.Distance(Game1.player.Tile, tile) > (pickup ? 10 : 4)) return;
         Helper.Input.Suppress(e.Button);
 
-        if (kind == "Generator" && Game1.player.CurrentItem?.QualifiedItemId == "(O)388")
+        if (pickup)
+        {
+            Game1.currentLocation.objects.Remove(tile);
+            var item = o.getOne();
+            if (!Game1.player.addItemToInventoryBool(item)) Game1.createItemDebris(item, Game1.player.getStandingPosition(), 2);
+            Game1.playSound("pickUpItem");
+            return;
+        }
+
+        string kind = o.bigCraftable.Value ? KindOf(o) : "";
+        var held = Game1.player.CurrentItem?.QualifiedItemId;
+        if (kind == "Generator" && held == "(O)388")
         {
             double fuel = GetD(o, FuelKey);
             if (fuel + HoursPerWood > MaxFuelHours) { Hud("The generator is full.", HUDMessage.error_type); return; }
@@ -375,7 +393,19 @@ public partial class ModEntry
             Hud($"Generator fuel: {fuel + HoursPerWood:0.#} h", HUDMessage.newQuest_type);
             return;
         }
-        Hud(Describe(o, kind), HUDMessage.newQuest_type);
+        if (kind == "Turret" && held == "(O)378")
+        {
+            double ammo = GetD(o, AmmoKey);
+            int fit = (int)Math.Floor((MaxAmmo - ammo) / AmmoPerOre);
+            int use = Math.Min(fit, Game1.player.CurrentItem!.Stack);
+            if (use <= 0) { Hud("The turret is full.", HUDMessage.error_type); return; }
+            SetD(o, AmmoKey, ammo + use * AmmoPerOre);
+            Game1.player.Items.ReduceId("(O)378", use);
+            Game1.playSound("clank");
+            Hud($"Turret ammo: {ammo + use * AmmoPerOre:0}/{MaxAmmo:0}", HUDMessage.newQuest_type);
+            return;
+        }
+        Hud(kind == "" ? DescribeDefense(o) : Describe(o, kind), HUDMessage.newQuest_type);
     }
 
     private string Describe(SObject o, string kind)
@@ -388,7 +418,7 @@ public partial class ModEntry
             "Generator" => $"Generator: fuel {GetD(o, FuelKey):0.#} h ({(n?.Online == true ? "running" : "idle")}).{grid}",
             "Battery" => $"Battery: {GetD(o, ChargeKey):0} / {BatteryCapWh:0} Wh.{grid}",
             "Solar" => $"Solar panel: {(n?.Supply ?? 0):0} W now.{grid}",
-            "Turret" => $"Mini-turret: {(n?.Online == true ? "online" : "NO POWER")}.{grid}",
+            "Turret" => $"Mini-turret: {(n?.Online == true ? "online" : "NO POWER")}, ammo {GetD(o, AmmoKey):0}/{MaxAmmo:0}.{grid}",
             _ => $"Power pole.{grid}"
         };
     }
@@ -440,7 +470,7 @@ public partial class ModEntry
                     new Color(255, 170 + (int)(Math.Sin(Game1.ticks / 5.0) * 40), 60) * 0.85f);
 
             // status lamp: green powered, red starved
-            bool ok = n.Kind switch { "Generator" => GetD(n.Obj, FuelKey) > 0, "Solar" => n.Supply > 1 || Daylight() > 0, _ => n.Online };
+            bool ok = n.Kind switch { "Generator" => GetD(n.Obj, FuelKey) > 0, "Solar" => n.Supply > 1 || Daylight() > 0, "Turret" => n.Online && GetD(n.Obj, AmmoKey) >= 1, _ => n.Online };
             if (n.Kind == "Pole") ok = grids[n.Grid].Satisfaction >= 0.5;
             // lamp sits just above the sprite (sprites are 2 tiles tall, bottom-aligned to the tile)
             var lamp = Game1.GlobalToLocal(Game1.viewport, new Vector2(n.Tile.X * 64 + 27, n.Tile.Y * 64 - (n.Kind == "Pole" ? 64 : n.Kind == "Turret" ? 52 : 78)));
@@ -475,8 +505,38 @@ public partial class ModEntry
         Helper.Events.Input.ButtonPressed += (_, e) => PowerButton(e);
     }
 
+    /// <summary>Remove leftovers from the dev power test (tagged objects, or the exact untagged test layout from an older build) and test hands.</summary>
+    private void CleanTestObjects()
+    {
+        var farm = Game1.getFarm();
+        var doomed = farm.objects.Pairs.Where(kv => kv.Value.modData.ContainsKey(TestKey)).Select(kv => kv.Key).ToList();
+        var d = farm.GetMainFarmHouseEntry();
+        var layout = new[] { (0, 0, "WoodGenerator"), (1, 0, "PowerBattery"), (2, 0, "SolarPanel"), (3, 0, "PowerPole"), (9, 0, "MiniTurret"), (9, 12, "MiniTurret") }
+            .Select(l => (tile: new Vector2(d.X + 6 + l.Item1, d.Y - 2 + l.Item2), id: PId(l.Item3))).ToList();
+        if (layout.All(l => farm.objects.TryGetValue(l.tile, out var o) && o.ItemId == l.id)) doomed.AddRange(layout.Select(l => l.tile));
+        foreach (var t in doomed.Distinct()) farm.objects.Remove(t);
+        int hands = data.Hands.RemoveAll(n => n.StartsWith("Test"));
+        if (doomed.Count > 0 || hands > 0) { Monitor.Log($"Removed {doomed.Distinct().Count()} leftover test objects and {hands} test hands from the save.", LogLevel.Info); SyncHands(true); }
+    }
+
+    internal void ReclaimPower()
+    {
+        var loc = Game1.currentLocation;
+        int n = 0;
+        foreach (var (tile, o) in loc.objects.Pairs.Where(kv => IsRimObject(kv.Value)).ToList())
+        {
+            loc.objects.Remove(tile);
+            var item = o.getOne();
+            if (!Game1.player.addItemToInventoryBool(item)) Game1.createItemDebris(item, Game1.player.getStandingPosition(), 2);
+            n++;
+        }
+        Hud($"Picked up {n} power/defense objects.", HUDMessage.achievement_type);
+    }
+
     private void RegisterPowerCommands()
     {
+        Helper.ConsoleCommands.Add("rd_defense", "Give sandbags, spike traps and explosive traps.", (_, _) => { if (Ready()) GiveDefenseKit(); });
+        Helper.ConsoleCommands.Add("rd_power_reclaim", "Pick up every power/defense object in the current location (also: Shift+right-click one).", (_, _) => { if (Ready()) ReclaimPower(); });
         Helper.ConsoleCommands.Add("rd_power", "Give the power kit (poles, generator, solar, battery, turret).", (_, _) => { if (Ready()) GivePowerKit(); });
     }
 }

@@ -112,4 +112,15 @@
     <researchViewX>3</researchViewX>
     <researchViewY>1</researchViewY>
   </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Defenses</defName>
+    <label>defenses</label>
+    <description>Sandbags, spike traps and explosive traps.</description>
+    <baseCost>400</baseCost>
+    <techLevel>Medieval</techLevel>
+    <tab>Main</tab>
+    <researchViewX>4</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
 </Defs>

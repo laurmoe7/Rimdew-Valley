@@ -22,6 +22,12 @@ public partial class ModEntry
         public string Owner = "";          // hand who does it (for skill XP)
         public Vector2 Tile;               // crop tile (water/harvest)
         public FarmAnimal? Animal;         // animals
+        public Vector2? Via;               // refuel/reload: chest tile to fetch supplies from first
+        public string Item = "";           // refuel/reload: qualified id fetched (wood or copper ore)
+        public int Count, Carry;           // how many to fetch / how many are in hand
+        public bool Fetched;
+        public Vector2? Stand;             // chosen stand spot for the current phase (cleared when the phase changes)
+        public bool StandPhase;
     }
 
     private class HandActor
@@ -391,8 +397,9 @@ public partial class ModEntry
                 if (dist >= 56) continue;
                 var push = dist < 0.5f ? new Vector2(1, 0) : d / dist;
                 float amount = (56 - dist) * 0.5f;
-                TryNudge(list[i], -push * amount);
-                TryNudge(list[j], push * amount);
+                // A hand that is walking somewhere barely gets shoved, so two hands heading opposite ways in a narrow gap can pass each other.
+                TryNudge(list[i], -push * amount * (list[i].Moving ? 0.15f : 1f));
+                TryNudge(list[j], push * amount * (list[j].Moving ? 0.15f : 1f));
             }
     }
 
@@ -416,6 +423,7 @@ public partial class ModEntry
             }
 
         if (Game1.ticks % 300 == 0) { walkCache.Clear(); RefreshHomes(); }
+        TickMaintenance();
         var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)
         {
@@ -459,8 +467,19 @@ public partial class ModEntry
                     continue;
                 }
                 a.Dir = 2; // face the crop/animal
-                a.Activity = a.Current.Kind switch { "water" => "watering", "harvest" => "harvesting", _ => "feeding" };
-                if (++a.WorkTimer >= WorkTicks) { Perform(a.Current); a.Current = null; }
+                a.Activity = a.Current.Kind switch
+                {
+                    "water" => "watering", "harvest" => "harvesting",
+                    "refuel" => a.Current.Fetched ? "refueling" : "fetching wood",
+                    "reload" => a.Current.Fetched ? "reloading" : "fetching ore",
+                    _ => "feeding"
+                };
+                if (++a.WorkTimer >= WorkTicks)
+                {
+                    a.WorkTimer = 0;
+                    if (IsMaintJob(a.Current) && !a.Current.Fetched) { if (!FetchSupplies(a.Current)) a.Current = null; }
+                    else { Perform(a.Current); a.Current = null; }
+                }
             }
         }
 
@@ -473,8 +492,36 @@ public partial class ModEntry
         }
     }
 
-    private static Vector2 StandSpot(HandJob j) =>
-        j.Kind == "animals" && j.Animal != null ? j.Animal.Position + new Vector2(0, 40) : j.Tile * 64f + new Vector2(0, 64);
+    private Vector2 StandSpot(HandJob j)
+    {
+        if (IsMaintJob(j))
+        {
+            if (j.Stand.HasValue && j.StandPhase == j.Fetched) return j.Stand.Value;
+            // Pick an open tile around the target that no other hand is standing on or heading to, so two hands never fight over a spot.
+            var target = j.Via.HasValue && !j.Fetched ? j.Via.Value : j.Tile;
+            var taken = new List<Vector2>();
+            foreach (var other in actors.Values)
+            {
+                if (other.Name == j.Owner) continue;
+                taken.Add(other.Pos);
+                if (other.Current is { Stand: { } st } oc && oc != j) taken.Add(st);
+            }
+            var me = actors.TryGetValue(j.Owner, out var self) ? self.Pos : target * 64f;
+            var offsets = new[] { (0, 1), (-1, 1), (1, 1), (-1, 0), (1, 0), (-1, -1), (1, -1), (0, -1), (0, 2) };
+            Vector2? pick = null;
+            foreach (var (dx, dy) in offsets.OrderBy(o => Vector2.DistanceSquared(me, (target + new Vector2(o.Item1, o.Item2)) * 64f)))
+            {
+                var cand = target + new Vector2(dx, dy);
+                if (!Walkable(new Point((int)cand.X, (int)cand.Y))) continue;
+                if (taken.Any(t => Vector2.Distance(t, cand * 64f) < 70f)) continue;
+                pick = cand * 64f; break;
+            }
+            j.Stand = pick ?? (target + new Vector2(0, 1)) * 64f;
+            j.StandPhase = j.Fetched;
+            return j.Stand.Value;
+        }
+        return j.Kind == "animals" && j.Animal != null ? j.Animal.Position + new Vector2(0, 40) : j.Tile * 64f + new Vector2(0, 64);
+    }
 
     /// <summary>Record skill XP for the hand who did a chore.</summary>
     private void Credit(HandJob j, bool plants)
@@ -536,6 +583,10 @@ public partial class ModEntry
                     Credit(j, true);
                     if (nearPlayer) Game1.playSound("harvest");
                 }
+                break;
+            case "refuel":
+            case "reload":
+                DoMaintenance(j);
                 break;
             case "animals":
                 if (j.Animal != null && j.Animal.fullness.Value < 200)

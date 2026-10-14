@@ -74,6 +74,7 @@ public partial class ModEntry : Mod
     {
         data = Helper.Data.ReadSaveData<SaveData>("state") ?? new SaveData();
         lastHealth = Game1.player.health;
+        CleanTestObjects();
         SendRoster();
         ApplyRecipeGating();
         SyncHands(true);
