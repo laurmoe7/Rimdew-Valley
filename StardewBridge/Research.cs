@@ -23,7 +23,9 @@ public partial class ModEntry
         ["MiniTurret"] = new[] { "Mini-Turret" },
         ["Defenses"] = new[] { "Sandbags", "Spike Trap", "Explosive Trap" },
         ["Climate"] = new[] { "Heater", "Cooler" },
-        ["Cooking"] = new[] { "Electric Stove" }
+        ["Cooking"] = new[] { "Electric Stove", "Microwave" },
+        ["NutrientPaste"] = new[] { "Nutrient Paste Dispenser" },
+        ["Freezer"] = new[] { "Freezer" }
     };
 
     internal JArray lastProjects = new();

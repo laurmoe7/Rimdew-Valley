@@ -15,7 +15,7 @@ namespace StardewBridge;
 public partial class ModEntry
 {
     private string? autoloadSave;
-    private bool powerTest, foodTest;
+    private bool powerTest, foodTest, chestTest, indoorTest;
     private int ptStart = -1;
     private int ptKills0;
     private bool autoloadStarted;
@@ -30,6 +30,14 @@ public partial class ModEntry
         string ff = Path.Combine(Helper.DirectoryPath, "dev_foodtest.flag");
         foodTest = File.Exists(ff);
         if (foodTest) { try { File.Delete(ff); } catch { } }
+        string cf = Path.Combine(Helper.DirectoryPath, "dev_chesttest.flag");
+        chestTest = File.Exists(cf);
+        if (chestTest) { try { File.Delete(cf); } catch { } }
+        string inf = Path.Combine(Helper.DirectoryPath, "dev_indoortest.flag");
+        indoorTest = File.Exists(inf);
+        if (indoorTest) { try { File.Delete(inf); } catch { } }
+        Helper.Events.GameLoop.UpdateTicked += (_, e) => TickIndoorTest(e);
+        Helper.Events.GameLoop.UpdateTicked += (_, e) => TickChestTest(e);
         Helper.Events.GameLoop.UpdateTicked += (_, e) => TickFoodTest(e);
         Helper.Events.GameLoop.UpdateTicked += (_, e) => TickAutoload(e);
         Helper.Events.GameLoop.UpdateTicked += (_, e) => TickPowerTest(e);
@@ -200,6 +208,79 @@ public partial class ModEntry
 
     // ---------- food / temperature / repair scenario ----------
     private int ftStart = -1;
+    private int ctStart = -1;
+
+    /// <summary>Experiment: can a Chest carry a custom item id and draw with its data sprite?</summary>
+    /// <summary>Draw the placed freezer / plain chest / microwave / dispenser (and the freezer's inventory icon) into an offscreen image.</summary>
+    private void ObjectShot(string name)
+    {
+        try
+        {
+            var gd = Game1.graphics.GraphicsDevice;
+            var farm = Game1.getFarm();
+            int w = 640, h = 360;
+            using var rt = new Microsoft.Xna.Framework.Graphics.RenderTarget2D(gd, w, h);
+            gd.SetRenderTarget(rt);
+            gd.Clear(new Color(90, 140, 70));
+            using (var b = new Microsoft.Xna.Framework.Graphics.SpriteBatch(gd))
+            {
+                b.Begin(Microsoft.Xna.Framework.Graphics.SpriteSortMode.FrontToBack, Microsoft.Xna.Framework.Graphics.BlendState.AlphaBlend, Microsoft.Xna.Framework.Graphics.SamplerState.PointClamp);
+                int vx = Game1.viewport.X / 64, vy = Game1.viewport.Y / 64;
+                int[] xs = { 68, 70, 72, 74 };
+                for (int i = 0; i < xs.Length; i++)
+                {
+                    var tile = new Vector2(xs[i], 19);
+                    if (!farm.objects.TryGetValue(tile, out var o)) continue;
+                    var saved = Game1.viewport;
+                    Game1.viewport = new xTile.Dimensions.Rectangle((xs[i] - 1 - i * 2) * 64 - 0, 17 * 64 - 0, w, h);
+                    o.draw(b, xs[i], 19, 1f);
+                    Game1.viewport = saved;
+                }
+                var fz = ItemRegistry.Create("(BC)" + FreezerId);
+                fz.drawInMenu(b, new Vector2(30, 200), 1f);
+                var plain = ItemRegistry.Create("(BC)130");
+                plain.drawInMenu(b, new Vector2(110, 200), 1f);
+                b.End();
+            }
+            gd.SetRenderTarget(null);
+            Directory.CreateDirectory(Path.Combine(Helper.DirectoryPath, "shots"));
+            using var fs = File.Create(Path.Combine(Helper.DirectoryPath, "shots", name + ".png"));
+            rt.SaveAsPng(fs, w, h);
+            Monitor.Log($"[chesttest] object screenshot saved: {name}", LogLevel.Alert);
+        }
+        catch (Exception ex) { Monitor.Log("[chesttest] object screenshot failed: " + ex, LogLevel.Alert); Game1.graphics.GraphicsDevice.SetRenderTarget(null); }
+    }
+
+    private void TickChestTest(UpdateTickedEventArgs e)
+    {
+        if (!chestTest || !Context.IsWorldReady) return;
+        if (ctStart < 0) ctStart = (int)e.Ticks;
+        int t = (int)e.Ticks - ctStart;
+        if (t == 60) Game1.warpFarmer("Farm", 76, 20, 2);
+        if (t == 200)
+        {
+            var farm = Game1.getFarm();
+            var created = ItemRegistry.Create("(BC)" + PId("Freezer"));
+            Monitor.Log($"[chesttest] ItemRegistry.Create gives {created.GetType().Name}", LogLevel.Alert);
+            try
+            {
+                var tile = new Vector2(68, 19);
+                var chest = (Chest)created;
+                chest.TileLocation = tile;
+                farm.objects[tile] = chest;
+                Monitor.Log($"[chesttest] freezer placed: {chest.ItemId} name={chest.Name} display={chest.DisplayName}", LogLevel.Alert);
+                var plain = new Chest(true, new Vector2(70, 19));
+                farm.objects[new Vector2(70, 19)] = plain;
+                var mw = PlaceTest(new Vector2(72, 19), "Microwave");
+                var np = PlaceTest(new Vector2(74, 19), "NutrientDispenser");
+            }
+            catch (Exception ex) { Monitor.Log("[chesttest] FAILED " + ex, LogLevel.Alert); }
+            Game1.player.Position = new Vector2(71 * 64, 21 * 64);
+        }
+        if (t == 400) ObjectShot("chest_experiment");
+        if (t == 440) { var f = Game1.getFarm(); foreach (var k in new[] { 68, 70, 72, 74 }) f.objects.Remove(new Vector2(k, 19)); chestTest = false; }
+    }
+
     private string? ftSeason; private int ftTime;
 
     private void Ft(string msg) => Monitor.Log("[foodtest] " + msg, LogLevel.Alert);
@@ -236,6 +317,23 @@ public partial class ModEntry
                 chest.Items.Add(ItemRegistry.Create("(O)771", 3));     // fiber for repairs
                 farm.objects[chestTile] = chest;
                 foreach (var n in data.Hands) data.Hunger[n] = 75;     // everyone is hungry
+                var disp = PlaceTest(new Vector2(x + 8, y), "NutrientDispenser")!;
+                SetD(disp, PasteKey, 14);                               // low enough that a hand tops it up
+                PlaceTest(new Vector2(x + 10, y), "Microwave");
+                var frzTile = new Vector2(x - 3, y + 2);
+                var frz = ItemRegistry.Create("(BC)" + FreezerId) as Chest;
+                Ft($"freezer item is a {ItemRegistry.Create("(BC)" + FreezerId).GetType().Name}");
+                if (frz != null)
+                {
+                    frz.TileLocation = frzTile; frz.modData[TestKey] = "1";
+                    frz.Items.Add(ItemRegistry.Create("(O)233", 2));     // ice cream: meant to be frozen
+                    frz.Items.Add(ItemRegistry.Create("(O)24", 10));     // frozen parsnips: need the microwave
+                    farm.objects[frzTile] = frz;
+                }
+                var farChest = new Chest(true, new Vector2(x - 8, y + 5));
+                farChest.modData[TestKey] = "1";
+                farChest.Items.Add(ItemRegistry.Create("(O)24", 40));   // unprotected: should spoil
+                farm.objects[new Vector2(x - 8, y + 5)] = farChest;
                 PlantTestPatch(); GrowAllCrops();                       // a field of fully grown parsnips: harvest at once, never water
                 doneWater = doneHarvest = 0;
                 Ft($"set up: stove/heater/cooler at {x + 2},{x + 4},{x + 6} row {y}; damaged sandbags at {x + 2},{y + 3}; chest with 6 parsnips, 1 honey, 3 fiber; hands hunger 75");
@@ -255,6 +353,15 @@ public partial class ModEntry
             if (t == 2120) Game1.activeClickableMenu = new RimDewMenu(this, 6);
             if (t == 2150) MenuShot("test_tab");
             if (t == 2160) Game1.exitActiveMenu();
+            if (t == 2500)
+            {
+                var near = (Chest)farm.objects[new Vector2(x - 3, y + 2)];
+                var far = (Chest)farm.objects[new Vector2(x - 8, y + 5)];
+                int nearBefore = near.Items.Where(Perishable).Sum(i => i.Stack), farBefore = far.Items.Where(Perishable).Sum(i => i.Stack);
+                var (lost, saved) = SpoilFood(0.5);
+                int nearAfter = near.Items.Where(Perishable).Sum(i => i.Stack), farAfter = far.Items.Where(Perishable).Sum(i => i.Stack);
+                Ft($"SPOILAGE (50% test rate): beside freezer {nearBefore}->{nearAfter}, unprotected {farBefore}->{farAfter}; lost={lost} saved={saved}");
+            }
             if (t == 3000)
             {
                 // temperature: winter night, with and without the heater
@@ -285,7 +392,7 @@ public partial class ModEntry
             }
             if (t == 3100)
             {
-                Ft($"RESULT harvested={doneHarvest} watered={doneWater} cropsLeftReady={FarmCrops(farm).Count(c => c.dirt.readyForHarvest())} mealsLeft={CountFood(i => FoodGrade(i) == 3)} hunger=[{string.Join(" ", data.Hands.Select(n => n + ":" + HungerOf(n).ToString("0")))}] log=[{string.Join("; ", Defenses)}]");
+                Ft($"RESULT paste={StorageSummary().paste} harvested={doneHarvest} watered={doneWater} cropsLeftReady={FarmCrops(farm).Count(c => c.dirt.readyForHarvest())} mealsLeft={CountFood(i => FoodGrade(i) == 3)} hunger=[{string.Join(" ", data.Hands.Select(n => n + ":" + HungerOf(n).ToString("0")))}] log=[{string.Join("; ", Defenses)}]");
                 foreach (var n in data.Hands) data.Hunger[n] = 25;
                 CleanTestObjects();
                 Game1.timeOfDay = ftTime;
@@ -293,5 +400,86 @@ public partial class ModEntry
             }
         }
         catch (Exception ex) { Ft("EXCEPTION: " + ex); foodTest = false; }
+    }
+
+    // ---------- indoor appliances scenario ----------
+    private int itStart = -1;
+    private StardewValley.Buildings.Building? itBuilding;
+
+    private void It(string msg) => Monitor.Log("[indoortest] " + msg, LogLevel.Alert);
+
+    private string ItStatus()
+    {
+        var parts = pNodes.Values.Where(n => n.Loc != null).Select(n => $"{n.Kind}:{(n.Online ? "ON" : "off")}(grid {n.Grid}: {grids[n.Grid].Supply:0}/{grids[n.Grid].Demand:0}W)");
+        return string.Join(" ", parts);
+    }
+
+    private void TickIndoorTest(UpdateTickedEventArgs e)
+    {
+        if (!indoorTest || !Context.IsWorldReady) return;
+        if (itStart < 0) { itStart = (int)e.Ticks; It("world ready"); }
+        int t = (int)e.Ticks - itStart;
+        var farm = Game1.getFarm();
+        var door = farm.GetMainFarmHouseEntry();
+        try
+        {
+            if (t == 20) Game1.warpFarmer("Farm", 76, 20, 2);
+            if (t == 150)
+            {
+                Game1.timeOfDay = 1200;
+                foreach (var id in new[] { "Heater", "Microwave", "NutrientDispenser", "WoodGenerator", "MiniTurret" })
+                    It($"{id}: can be placed indoors = {Game1.bigCraftableData["laurm.RimPower_" + id].CanBePlacedIndoors}");
+                bool built = false;
+                for (int ty = 6; ty < 70 && !built; ty += 2)
+                    for (int tx = 6; tx < 72 && !built; tx += 2)
+                        if (farm.buildStructure(BunkFreeId, new Vector2(tx, ty), Game1.player, out var b, magicalConstruction: true))
+                        { b.daysOfConstructionLeft.Value = 0; itBuilding = b; built = true; It($"bunkhouse at {b.tileX.Value},{b.tileY.Value} ({b.tilesWide.Value}x{b.tilesHigh.Value}), door {b.humanDoor.Value}"); }
+                if (!built) { It("FAIL: no room for a bunkhouse"); indoorTest = false; }
+            }
+            if (t == 300 && itBuilding != null)
+            {
+                var indoors = itBuilding.GetIndoors();
+                if (indoors == null) { It("FAIL: no interior"); indoorTest = false; return; }
+                int n = 0;
+                foreach (var id in new[] { "Heater", "Microwave", "NutrientDispenser" })
+                {
+                    var tile = new Vector2(3 + n++, 4);
+                    indoors.objects.Remove(tile);
+                    var o = (SObject)ItemRegistry.Create("(BC)laurm.RimPower_" + id);
+                    o.TileLocation = tile; o.modData[TestKey] = "1";
+                    indoors.objects[tile] = o;
+                }
+                It($"placed heater, microwave and dispenser inside {indoors.NameOrUniqueName}");
+            }
+            if (t == 420) It("NO feeder outside: " + ItStatus());
+            if (t == 450 && itBuilding != null)
+            {
+                var gen = PlaceTest(new Vector2(itBuilding.tileX.Value + itBuilding.tilesWide.Value + 1, itBuilding.tileY.Value + 1), "WoodGenerator")!;
+                SetD(gen, FuelKey, 8);
+                It($"generator placed at {gen.TileLocation} (1 tile from the building)");
+            }
+            if (t == 600) It("generator adjacent: " + ItStatus());
+            if (t == 630 && itBuilding != null)
+            {
+                // an indoor heater should warm a hand standing inside on a freezing night
+                SetTempEvent(-18); Game1.currentSeason = "winter"; Game1.timeOfDay = 300;
+                var fake = new HandActor { Name = "ItFake", Inside = true, Bunk = itBuilding, Pos = new Vector2(4 * 64, 5 * 64) };
+                double withHeater = TempFor(fake);
+                var farmGen = farm.objects[new Vector2(itBuilding.tileX.Value + itBuilding.tilesWide.Value + 1, itBuilding.tileY.Value + 1)];
+                farm.objects.Remove(farmGen.TileLocation);
+                RescanPower(); SimulatePower(0);
+                double noPower = TempFor(fake);
+                SetTempEvent(0); Game1.currentSeason = ftSeason ?? "spring"; Game1.timeOfDay = 1200;
+                It($"cold-snap night inside: heater powered {withHeater:0.0} C, generator removed {noPower:0.0} C");
+            }
+            if (t == 700)
+            {
+                if (itBuilding != null) farm.destroyStructure(itBuilding);
+                CleanTestObjects();
+                It("RESULT done; test bunkhouse and objects removed. nothing was saved.");
+                indoorTest = false;
+            }
+        }
+        catch (Exception ex) { It("EXCEPTION: " + ex); indoorTest = false; }
     }
 }

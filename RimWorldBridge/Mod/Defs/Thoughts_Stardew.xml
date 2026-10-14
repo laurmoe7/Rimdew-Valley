@@ -255,4 +255,26 @@
     </li></stages>
   </ThoughtDef>
 
+
+  <ThoughtDef>
+    <defName>SD_AtePaste</defName>
+    <durationDays>0.5</durationDays>
+    <stackLimit>2</stackLimit>
+    <stages><li>
+      <label>ate nutrient paste</label>
+      <description>It keeps me going, but it is not exactly a meal.</description>
+      <baseMoodEffect>-2</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_AteFrozen</defName>
+    <durationDays>0.6</durationDays>
+    <stackLimit>2</stackLimit>
+    <stages><li>
+      <label>ate frozen food</label>
+      <description>I had to eat it straight from the freezer. My teeth hurt.</description>
+      <baseMoodEffect>-6</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
 </Defs>

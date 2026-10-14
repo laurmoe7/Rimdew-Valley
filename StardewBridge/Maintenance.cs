@@ -15,7 +15,7 @@ public partial class ModEntry
     private const double RefuelBelowHours = 8, ReloadBelowAmmo = 40;
     private const int RepairBelowHp = 60;
 
-    private static bool IsMaintJob(HandJob j) => j.Kind is "refuel" or "reload" or "repair" or "cook" or "eat";
+    private static bool IsMaintJob(HandJob j) => j.Kind is "refuel" or "reload" or "repair" or "cook" or "eat" or "stock" or "heat";
 
     private IEnumerable<Chest> FarmChests() =>
         Game1.getFarm().objects.Values.OfType<Chest>().Where(c => c.playerChest.Value && c.SpecialChestType == Chest.SpecialChestTypes.None);
@@ -67,10 +67,31 @@ public partial class ModEntry
         {
             if (HungerOf(hand.Name) < EatAt) continue;
             var food = FindBestFood(hand.Pos / 64f);
-            if (food == null) continue;
-            idle.Remove(hand);
-            hand.Jobs.Enqueue(new HandJob { Kind = "eat", Owner = hand.Name, Tile = food.Value.chest.TileLocation });
-            Monitor.Log($"[maint] {hand.Name} is hungry ({HungerOf(hand.Name):0}) and goes to eat from the chest at {food.Value.chest.TileLocation.X},{food.Value.chest.TileLocation.Y}", LogLevel.Debug);
+            int chestRank = food == null ? 0 : FoodRank(FoodGrade(food.Value.item));
+            // a stocked, powered nutrient paste dispenser beats raw crops (but not snacks or cooked meals)
+            var disp = pNodes.Values.Where(n => n.Kind == "Dispenser" && n.Online && GetD(n.Obj, PasteKey) >= 1)
+                                    .OrderBy(n => Vector2.DistanceSquared(n.Pos * 64f, hand.Pos)).FirstOrDefault();
+            var micro = pNodes.Values.Where(n => n.Kind == "Microwave" && n.Online).OrderBy(n => Vector2.DistanceSquared(n.Pos * 64f, hand.Pos)).FirstOrDefault();
+            bool frozenPick = food != null && IsFreezer(food.Value.chest) && !MeantFrozen(food.Value.item);
+            if (disp != null && chestRank < 2)
+            {
+                idle.Remove(hand);
+                hand.Jobs.Enqueue(new HandJob { Kind = "eat", Owner = hand.Name, Tile = disp.Tile, Item = "paste" });
+                Monitor.Log($"[maint] {hand.Name} is hungry ({HungerOf(hand.Name):0}) and goes to the nutrient dispenser at {disp.Pos.X},{disp.Pos.Y}", LogLevel.Debug);
+            }
+            else if (food != null && frozenPick && micro != null)
+            {
+                idle.Remove(hand);
+                var f = food.Value;
+                hand.Jobs.Enqueue(new HandJob { Kind = "heat", Owner = hand.Name, Tile = micro.Tile, Via = f.chest.TileLocation, Item = f.item.QualifiedItemId, Count = 1 });
+                Monitor.Log($"[maint] {hand.Name} is hungry ({HungerOf(hand.Name):0}): thaw {f.item.Name} from the freezer at {f.chest.TileLocation.X},{f.chest.TileLocation.Y} in the microwave at {micro.Pos.X},{micro.Pos.Y}", LogLevel.Debug);
+            }
+            else if (food != null)
+            {
+                idle.Remove(hand);
+                hand.Jobs.Enqueue(new HandJob { Kind = "eat", Owner = hand.Name, Tile = food.Value.chest.TileLocation });
+                Monitor.Log($"[maint] {hand.Name} is hungry ({HungerOf(hand.Name):0}) and goes to eat from the chest at {food.Value.chest.TileLocation.X},{food.Value.chest.TileLocation.Y}", LogLevel.Debug);
+            }
         }
 
         // 2. upkeep, in daylight hours only
@@ -80,28 +101,30 @@ public partial class ModEntry
         int meals = CountFood(i => FoodGrade(i) == 3);
         bool wantMeals = meals < Math.Max(2, data.Hands.Count * 2);
 
-        var tasks = new List<(Vector2 tile, string kind, string item, int count)>();
+        var tasks = new List<(Vector2 tile, Vector2 pos, string kind, string item, int count)>();
         foreach (var n in pNodes.Values)
         {
             if (reserved.Contains(n.Tile)) continue;
             if (n.Kind == "Generator" && GetD(n.Obj, FuelKey) <= RefuelBelowHours && woodLeft > 0 && GridWantsPower(n))
-            { int c = (int)Math.Min(5, Math.Min(woodLeft, Math.Ceiling((MaxFuelHours - GetD(n.Obj, FuelKey)) / HoursPerWood))); woodLeft -= c; tasks.Add((n.Tile, "refuel", WoodId, c)); }
+            { int c = (int)Math.Min(5, Math.Min(woodLeft, Math.Ceiling((MaxFuelHours - GetD(n.Obj, FuelKey)) / HoursPerWood))); woodLeft -= c; tasks.Add((n.Tile, n.Pos, "refuel", WoodId, c)); }
             else if (n.Kind == "Turret" && GetD(n.Obj, AmmoKey) <= ReloadBelowAmmo && oreLeft > 0)
-            { int c = (int)Math.Min(10, Math.Min(oreLeft, Math.Floor((MaxAmmo - GetD(n.Obj, AmmoKey)) / AmmoPerOre))); oreLeft -= c; tasks.Add((n.Tile, "reload", OreId, c)); }
+            { int c = (int)Math.Min(10, Math.Min(oreLeft, Math.Floor((MaxAmmo - GetD(n.Obj, AmmoKey)) / AmmoPerOre))); oreLeft -= c; tasks.Add((n.Tile, n.Pos, "reload", OreId, c)); }
+            else if (n.Kind == "Dispenser" && n.Online && GetD(n.Obj, PasteKey) < 15 && rawLeft >= 1)
+            { int c = (int)Math.Min(10, Math.Min(rawLeft, 30 - GetD(n.Obj, PasteKey))); rawLeft -= c; tasks.Add((n.Tile, n.Pos, "stock", "raw", c)); }
             else if (n.Kind == "Stove" && n.Online && wantMeals && rawLeft >= 2)
-            { rawLeft -= 2; wantMeals = false; tasks.Add((n.Tile, "cook", "raw", 2)); }
+            { rawLeft -= 2; wantMeals = false; tasks.Add((n.Tile, n.Pos, "cook", "raw", 2)); }
         }
         foreach (var (tile, o) in Game1.getFarm().objects.Pairs)
             if (IsSandbag(o) && !reserved.Contains(tile) && fiberLeft > 0 && (int)GetD(o, HpKey, SandbagHp) <= RepairBelowHp)
-            { fiberLeft--; tasks.Add((tile, "repair", FiberId, 1)); }
+            { fiberLeft--; tasks.Add((tile, tile, "repair", FiberId, 1)); }
 
-        foreach (var (tile, kind, item, count) in tasks)
+        foreach (var (tile, pos, kind, item, count) in tasks)
         {
             if (idle.Count == 0) break;
             if (count <= 0) continue;
-            var chest = NearestChestWith(item, tile);
+            var chest = NearestChestWith(item, pos);
             if (chest == null) continue;
-            var hand = idle.OrderBy(a => Vector2.DistanceSquared(a.Pos, tile * 64f)).First();
+            var hand = idle.OrderBy(a => Vector2.DistanceSquared(a.Pos, pos * 64f)).First();
             idle.Remove(hand);
             hand.Jobs.Enqueue(new HandJob { Kind = kind, Owner = hand.Name, Tile = tile, Via = chest.TileLocation, Item = item, Count = count });
             Monitor.Log($"[maint] {hand.Name}: {kind} at {tile.X},{tile.Y} ({count} x {item}) from chest at {chest.TileLocation.X},{chest.TileLocation.Y}", LogLevel.Debug);
@@ -154,7 +177,10 @@ public partial class ModEntry
         if (j.Kind == "eat") { Eat(j); return; }
         if (!j.Fetched && !FetchSupplies(j)) return;
         var farm = Game1.getFarm();
-        if (!farm.objects.TryGetValue(j.Tile, out var o)) { ReturnHeld(j); return; }
+        SObject? o = null;
+        if (j.Kind == "repair") farm.objects.TryGetValue(j.Tile, out o);
+        else if (pNodes.TryGetValue(j.Tile, out var tnode)) o = tnode.Obj;   // appliances, on the farm or inside a building
+        if (o == null) { ReturnHeld(j); return; }
         bool farmNow = Game1.currentLocation is StardewValley.Farm;
         switch (j.Kind)
         {
@@ -173,6 +199,18 @@ public partial class ModEntry
                 o.modData[HpKey] = SandbagHp.ToString();
                 if (farmNow) Game1.playSound("axchop");
                 Defenses.Add($"{j.Owner} repaired sandbags");
+                break;
+            case "heat" when IsPowerObject(o) && pNodes.TryGetValue(j.Tile, out var mnode) && mnode.Online:
+                foreach (var thawed in j.Held) ApplyMeal(j.Owner, thawed, false);
+                if (j.Held.Count > 0) Defenses.Add($"{j.Owner} thawed it in the microwave");
+                j.Held.Clear();
+                if (farmNow) Game1.playSound("furnace");
+                break;
+            case "stock" when IsPowerObject(o):
+                SetD(o, PasteKey, Math.Min(40, GetD(o, PasteKey) + j.Carry));
+                j.Held.Clear();
+                if (farmNow) Game1.playSound("dwop");
+                Defenses.Add($"{j.Owner} stocked the dispenser");
                 break;
             case "cook" when IsPowerObject(o) && pNodes.TryGetValue(j.Tile, out var stove) && stove.Online:
                 var meal = ItemRegistry.Create("(O)" + PId("SimpleMeal"), 1);

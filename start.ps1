@@ -45,6 +45,8 @@ if ($rw) { [Win]::ShowWindow($rw.MainWindowHandle, 6) | Out-Null }   # 6 = minim
 $modDir = "$stardew\Mods\StardewBridge"
 if ($Autoload) { Set-Content -Path "$modDir\dev_autoload.txt" -Value $Autoload -NoNewline }
 if ($Test -eq "power") { New-Item -ItemType File -Force -Path "$modDir\dev_powertest.flag" | Out-Null }
+if ($Test -eq "indoor") { New-Item -ItemType File -Force -Path "$modDir\dev_indoortest.flag" | Out-Null }
+if ($Test -eq "chest") { New-Item -ItemType File -Force -Path "$modDir\dev_chesttest.flag" | Out-Null }
 if ($Test -eq "food") { New-Item -ItemType File -Force -Path "$modDir\dev_foodtest.flag" | Out-Null }
 if (-not (Get-Process "StardewModdingAPI" -ErrorAction SilentlyContinue)) {
     Start-Process "$stardew\StardewModdingAPI.exe" -WorkingDirectory $stardew

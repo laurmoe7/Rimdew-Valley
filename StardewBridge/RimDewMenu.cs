@@ -365,13 +365,15 @@ public partial class RimDewMenu : IClickableMenu
         Text(b, $"Outdoors: {outdoor:0} C", c.X, c.Y - 4, outdoor < 5 || outdoor > 32 ? Color.Firebrick : Color.ForestGreen);
         var f = mod.FoodSummary();
         Text(b, $"Food in chests: {f.meals} meals, {f.snacks} snacks, {f.raw} raw", c.X + 260, c.Y - 4, f.meals + f.snacks + f.raw == 0 ? Color.Firebrick : Game1.textColor);
+        var st = mod.StorageSummary();
+        Text(b, $"Nutrient paste loaded: {st.paste}    Freezers: {(st.freezers == 0 ? "none" : st.freezers.ToString())}    Microwaves: {(st.microwaves == 0 ? "none" : st.microwaves.ToString())}", c.X, c.Y + 28);
         var hands = mod.Data.Hands;
         if (hands.Count == 0) { Text(b, "No farmhands hired.", c.X, c.Y + 50, Color.Gray); return; }
-        Text(b, "Hunger", c.X + 230, c.Y + 36, Color.Gray);
-        Text(b, "Temperature", c.X + 520, c.Y + 36, Color.Gray);
+        Text(b, "Hunger", c.X + 230, c.Y + 62, Color.Gray);
+        Text(b, "Temperature", c.X + 520, c.Y + 62, Color.Gray);
         for (int i = 0; i < hands.Count; i++)
         {
-            int ry = c.Y + 70 + i * 40;
+            int ry = c.Y + 96 + i * 40;
             string nm = hands[i];
             Text(b, nm, c.X, ry);
             double hunger = mod.HungerOf(nm);

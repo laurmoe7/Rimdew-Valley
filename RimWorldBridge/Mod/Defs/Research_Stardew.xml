@@ -145,4 +145,26 @@
     <researchViewX>5</researchViewX>
     <researchViewY>1</researchViewY>
   </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_NutrientPaste</defName>
+    <label>nutrient paste</label>
+    <description>Nutrient paste dispensers.</description>
+    <baseCost>650</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>6</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Freezer</defName>
+    <label>freezers</label>
+    <description>Chest freezers that stop food spoiling.</description>
+    <baseCost>700</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>6</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
 </Defs>

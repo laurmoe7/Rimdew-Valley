@@ -58,19 +58,36 @@ public partial class ModEntry
         };
     }
 
+    internal static bool IsFreezer(Chest c) => c.ItemId == FreezerId;
+
+    /// <summary>Ice cream is meant to be frozen; everything else tastes bad straight from the freezer.</summary>
+    private static bool MeantFrozen(Item i) => i.ItemId == "233";
+
+    private bool MicrowaveReady() => pNodes.Values.Any(n => n.Kind == "Microwave" && n.Online);
+
+    /// <summary>Preference order when hungry: cooked meal 4, snack 3, nutrient paste 2, raw 1.</summary>
+    private static int FoodRank(int grade) => grade switch { 3 => 4, 2 => 3, 1 => 1, _ => 0 };
+
     private static bool IsRawFood(Item? i) => FoodGrade(i) == 1 && i is SObject o && o.Category != SObject.FishCategory;
 
     private (Chest chest, Item item)? FindBestFood(Vector2 from)
     {
-        (Chest, Item)? best = null; int bestGrade = 0; float bestDist = float.MaxValue;
+        bool canHeat = MicrowaveReady();
+        (Chest, Item)? best = null; int bestScore = 0; float bestDist = float.MaxValue;
         foreach (var c in FarmChests())
+        {
+            bool cold = IsFreezer(c);
             foreach (var it in c.Items)
             {
                 int g = FoodGrade(it);
                 if (g == 0) continue;
+                // food that is frozen and cannot be thawed is a last resort; with a working microwave it is as good as anything
+                bool bad = cold && !MeantFrozen(it) && !canHeat;
+                int score = FoodRank(g) * 2 + (bad ? 0 : 1);
                 float d = Vector2.DistanceSquared(c.TileLocation, from);
-                if (g > bestGrade || (g == bestGrade && d < bestDist)) { best = (c, it); bestGrade = g; bestDist = d; }
+                if (score > bestScore || (score == bestScore && d < bestDist)) { best = (c, it); bestScore = score; bestDist = d; }
             }
+        }
         return best;
     }
 
@@ -79,18 +96,34 @@ public partial class ModEntry
     /// <summary>A hungry hand eats the best food available from the nearest chest holding it.</summary>
     private void Eat(HandJob j)
     {
+        if (j.Item == "paste")
+        {
+            if (!pNodes.TryGetValue(j.Tile, out var dn) || !dn.Online || GetD(dn.Obj, PasteKey) < 1) return;
+            var disp = dn.Obj;
+            SetD(disp, PasteKey, GetD(disp, PasteKey) - 1);
+            data.Hunger[j.Owner] = Math.Max(0, HungerOf(j.Owner) - 45);
+            SendNpcEvent(j.Owner, "ate_paste");
+            Defenses.Add($"{j.Owner} ate nutrient paste");
+            return;
+        }
         var pick = FindBestFood(j.Tile);
-        Monitor.Log($"[food] {j.Owner} tries to eat at {j.Tile}: {(pick == null ? "no food found; chests=" + FarmChests().Count() : pick.Value.item.Name)}", LogLevel.Debug);
         if (pick == null) return;
         var (chest, item) = pick.Value;
-        int grade = FoodGrade(item);
+        bool frozen = IsFreezer(chest) && !MeantFrozen(item);
+        var eaten = item.getOne();
         item.Stack--;
         if (item.Stack <= 0) chest.Items.Remove(item);
-        double before = HungerOf(j.Owner);
-        data.Hunger[j.Owner] = Math.Max(0, before - grade switch { 3 => 70, 2 => 35, _ => 30 });
-        string kind = grade switch { 3 => "ate_meal", 2 => "ate_snack", _ => "ate_raw" };
-        SendNpcEvent(j.Owner, kind);
-        Defenses.Add($"{j.Owner} ate {(grade == 3 ? "a meal" : grade == 2 ? "a snack" : "raw food")}");
+        ApplyMeal(j.Owner, eaten, frozen);
+    }
+
+    /// <summary>Hunger goes down by the food's grade; the mood event says how it tasted. Frozen food that was not thawed is miserable.</summary>
+    private void ApplyMeal(string who, Item food, bool unthawed)
+    {
+        int grade = FoodGrade(food);
+        data.Hunger[who] = Math.Max(0, HungerOf(who) - grade switch { 3 => 70, 2 => 35, _ => 30 });
+        string kind = unthawed ? "ate_frozen" : grade switch { 3 => "ate_meal", 2 => "ate_snack", _ => "ate_raw" };
+        SendNpcEvent(who, kind);
+        Defenses.Add($"{who} ate {(unthawed ? "frozen food" : grade == 3 ? "a meal" : grade == 2 ? "a snack" : "raw food")}");
         if (Game1.currentLocation is StardewValley.Farm) Game1.playSound("eat");
     }
 
@@ -119,12 +152,49 @@ public partial class ModEntry
         }
         foreach (var n in pNodes.Values)
         {
-            if (!n.Online || Vector2.Distance(n.Tile, at) > radius) continue;
+            if (!n.Online) continue;
+            if (n.Loc != null) { if (!(a.Inside && a.Bunk?.GetIndoors() == n.Loc)) continue; }   // an appliance indoors only serves that room
+            else if (Vector2.Distance(n.Tile, at) > radius) continue;
             if (n.Kind == "Heater" && t < 21) t = Math.Min(21, t + 30);
             else if (n.Kind == "Cooler" && t > 24) t = Math.Max(24, t - 25);
         }
         return t;
     }
+
+    private static bool Perishable(Item? i) => FoodGrade(i) is 1 or 3;
+
+    /// <summary>Overnight, about a fifth of the perishable food (raw crops, eggs, milk, fish, cooked meals) in ordinary chests spoils.
+    /// Chests within 3 tiles of a powered freezer keep everything.</summary>
+    internal (int lost, int saved) SpoilFood(double chance = 0.2)
+    {
+        int lost = 0, saved = 0;
+        foreach (var chest in FarmChests().ToList())
+        {
+            bool frozen = IsFreezer(chest);
+            foreach (var item in chest.Items.Where(Perishable).ToList())
+            {
+                int rot = 0;
+                for (int u = 0; u < item.Stack; u++) if (Game1.random.NextDouble() < chance) rot++;
+                if (rot == 0) continue;
+                if (frozen) { saved += rot; continue; }
+                item.Stack -= rot;
+                lost += rot;
+                if (item.Stack <= 0) chest.Items.Remove(item);
+            }
+        }
+        return (lost, saved);
+    }
+
+    private void SpoilOvernight()
+    {
+        var (lost, saved) = SpoilFood();
+        if (lost > 0) Hud($"{lost} food item{(lost == 1 ? "" : "s")} spoiled overnight.{(saved > 0 ? $" Freezers saved {saved}." : " Keep food in a freezer to stop it spoiling.")}", HUDMessage.error_type);
+        else if (saved > 0) Hud($"Freezers kept {saved} food item{(saved == 1 ? "" : "s")} from spoiling.", HUDMessage.achievement_type);
+    }
+
+    internal (int paste, int freezers, int microwaves) StorageSummary() =>
+        ((int)pNodes.Values.Where(n => n.Kind == "Dispenser").Sum(n => GetD(n.Obj, PasteKey)),
+         FarmChests().Count(IsFreezer), pNodes.Values.Count(n => n.Kind == "Microwave" && n.Online));
 
     internal (int meals, int snacks, int raw) FoodSummary() =>
         (CountFood(i => FoodGrade(i) == 3), CountFood(i => FoodGrade(i) == 2), CountFood(i => FoodGrade(i) == 1));

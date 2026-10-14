@@ -42,3 +42,30 @@ internal static class FreeCraftConsumePatch
 {
     private static bool Prefix() => ModEntry.Instance?.Config.FreeCrafting != true;
 }
+
+/// <summary>The Freezer is a real storage chest with its own look: creating the item yields a Chest carrying the freezer's id.</summary>
+[HarmonyPatch(typeof(StardewValley.ItemTypeDefinitions.BigCraftableDataDefinition), nameof(StardewValley.ItemTypeDefinitions.BigCraftableDataDefinition.CreateItem))]
+internal static class FreezerCreatePatch
+{
+    private static void Postfix(StardewValley.ItemTypeDefinitions.ParsedItemData data, ref Item __result)
+    {
+        if (data.ItemId == ModEntry.FreezerId && __result is not Chest)
+            __result = new Chest(true, Microsoft.Xna.Framework.Vector2.Zero, ModEntry.FreezerId);
+    }
+}
+
+/// <summary>Vanilla chests animate a lid from a fixed sprite layout; the freezer is a single static sprite, so draw it like any big craftable.</summary>
+[HarmonyPatch(typeof(Chest), nameof(Chest.draw), new[] { typeof(Microsoft.Xna.Framework.Graphics.SpriteBatch), typeof(int), typeof(int), typeof(float) })]
+internal static class FreezerDrawPatch
+{
+    private static bool Prefix(Chest __instance, Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, int x, int y, float alpha)
+    {
+        if (__instance.ItemId != ModEntry.FreezerId) return true;
+        var data = ItemRegistry.GetDataOrErrorItem(__instance.QualifiedItemId);
+        var pos = Game1.GlobalToLocal(Game1.viewport, new Microsoft.Xna.Framework.Vector2(x * 64, (y - 1) * 64));
+        float depth = Math.Max(0f, ((y + 1) * 64 - 24) / 10000f) + x * 1E-05f;
+        spriteBatch.Draw(data.GetTexture(), pos, data.GetSourceRect(), Microsoft.Xna.Framework.Color.White * alpha, 0f, Microsoft.Xna.Framework.Vector2.Zero, 4f,
+            Microsoft.Xna.Framework.Graphics.SpriteEffects.None, depth);
+        return false;
+    }
+}

@@ -4,6 +4,7 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.GameData.BigCraftables;
+using StardewValley.Buildings;
 using StardewValley.Monsters;
 using SObject = StardewValley.Object;
 
@@ -21,6 +22,10 @@ public partial class ModEntry
     private const double GeneratorWatts = 1000, SolarPeakWatts = 500, TurretWatts = 100, BatteryCapWh = 2000;
     private const double HoursPerWood = 4, MaxFuelHours = 24;
     private const double AmmoPerOre = 10, MaxAmmo = 100;
+    internal const string FreezerId = "laurm.RimPower_Freezer";
+    private static int SheetCells => PowerItems.Length + 1;          // the last cell is the freezer
+    private static int FreezerCell => PowerItems.Length;
+    private const string PasteKey = "laurm.RimPower/paste";
     private const string AmmoKey = "laurm.RimPower/ammo", TestKey = "laurm.RimPower/test";
     private const string FuelKey = "laurm.RimPower/fuel", ChargeKey = "laurm.RimPower/charge";
 
@@ -36,9 +41,16 @@ public partial class ModEntry
         new("ElectricStove", "Electric Stove", "Hands cook raw crops into Simple Meals here. Needs 150 W.",              "Electric Stove", "335 2 334 3 390 10"),
         new("Heater",        "Heater",         "Warms hands within 7 tiles (or a nearby bunkhouse) toward 21 C. Needs 250 W.",  "Heater",         "335 3 382 5 334 2"),
         new("Cooler",        "Cooler",         "Cools hands within 7 tiles (or a nearby bunkhouse) toward 24 C. Needs 250 W.",  "Cooler",         "335 3 334 3 338 2"),
+        new("NutrientDispenser", "Nutrient Paste Dispenser", "Hands load raw crops into it and eat paste meals when nothing better is on offer. Needs 150 W.", "Nutrient Paste Dispenser", "335 4 334 4 338 3"),
+        new("Microwave",     "Microwave",      "Farmhands thaw frozen food in it before eating. Needs 100 W.",                  "Microwave",      "335 2 334 2 338 1"),
     };
 
-    private static readonly HashSet<string> PowerRecipeNames = PowerItems.Select(p => p.Recipe).Concat(DefItems.Select(d => d.Recipe)).ToHashSet();
+    private static readonly HashSet<string> PowerRecipeNames = PowerItems.Select(p => p.Recipe).Append("Freezer").Concat(DefItems.Select(d => d.Recipe)).ToHashSet();
+
+    /// <summary>Appliances that only consume power may stand inside a building, if a generator, solar panel, battery or pole is within
+    /// <see cref="FeedReach"/> tiles of the building outside.</summary>
+    private static readonly HashSet<string> IndoorCapable = new() { "ElectricStove", "Heater", "Cooler", "Microwave", "NutrientDispenser" };
+    private const float FeedReach = 2f;
 
     private static string PId(string shortId) => PowerPrefix + shortId;
     private static bool IsPowerObject(SObject o) => o.bigCraftable.Value && o.ItemId.StartsWith(PowerPrefix);
@@ -47,7 +59,11 @@ public partial class ModEntry
     private class PNode
     {
         public SObject Obj = null!;
-        public Vector2 Tile;
+        public Vector2 Tile;               // key in pNodes: the farm tile, or a unique virtual tile for appliances inside buildings
+        public GameLocation? Loc;          // the building interior this appliance stands in (null = on the farm)
+        public Vector2 RealTile;           // tile inside that interior
+        public Vector2 Anchor;             // farm tile at the building's door: where hands go to use an indoor appliance
+        public Vector2 Pos => Loc == null ? Tile : Anchor;   // where the node "is" on the farm, for linking and walking
         public string Kind = "";
         public int Grid;
         public double Supply, Demand;
@@ -87,9 +103,14 @@ public partial class ModEntry
                     data[PId(p.Id)] = new BigCraftableData
                     {
                         Name = PId(p.Id), DisplayName = p.Name, Description = p.Description, Price = 0, Fragility = 0,
-                        CanBePlacedOutdoors = true, CanBePlacedIndoors = false, Texture = PowerSheetAsset, SpriteIndex = i
+                        CanBePlacedOutdoors = true, CanBePlacedIndoors = IndoorCapable.Contains(p.Id), Texture = PowerSheetAsset, SpriteIndex = i
                     };
                 }
+                data[FreezerId] = new BigCraftableData
+                {
+                    Name = FreezerId, DisplayName = "Freezer", Description = "A chest freezer. Food kept inside never spoils, but must be thawed (microwave) before it tastes right.",
+                    Price = 0, Fragility = 0, CanBePlacedOutdoors = true, CanBePlacedIndoors = true, Texture = PowerSheetAsset, SpriteIndex = FreezerCell
+                };
             });
         }
         else if (e.NameWithoutLocale.IsEquivalentTo("Data/CraftingRecipes"))
@@ -97,6 +118,7 @@ public partial class ModEntry
             e.Edit(asset =>
             {
                 var data = asset.AsDictionary<string, string>().Data;
+                data["Freezer"] = $"335 5 334 3 338 5/Home/{FreezerId}/true/default/Freezer";
                 foreach (var p in PowerItems) data[p.Recipe] = $"{p.RecipeIngredients}/Home/{PId(p.Id)}/true/default/{p.Name}";
             });
         }
@@ -115,6 +137,7 @@ public partial class ModEntry
     {
         foreach (var p in PowerItems)
             Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(BC)" + PId(p.Id), p.Id == "PowerPole" ? 6 : 1));
+        Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(BC)" + FreezerId));
         Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)388", 50));
         Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)378", 50));
         Hud("Power kit: pole x6, generator, solar, battery, mini-turret, 50 wood, 50 copper ore.", HUDMessage.achievement_type);
@@ -125,8 +148,8 @@ public partial class ModEntry
     {
         if (powerSheet != null) return powerSheet;
         const int W = 16, H = 32;
-        var px = new Color[W * H * PowerItems.Length];
-        void Set(int cell, int x, int y, Color c) { if (x >= 0 && x < W && y >= 0 && y < H) px[y * W * PowerItems.Length + cell * W + x] = c; }
+        var px = new Color[W * H * SheetCells];
+        void Set(int cell, int x, int y, Color c) { if (x >= 0 && x < W && y >= 0 && y < H) px[y * W * SheetCells + cell * W + x] = c; }
         void Rect(int cell, int x, int y, int w, int h, Color c) { for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) Set(cell, i, j, c); }
         var dark = new Color(28, 24, 22);
 
@@ -176,6 +199,29 @@ public partial class ModEntry
         Rect(7, 2, 13, 12, 17, cw); Rect(7, 2, 13, 12, 2, new Color(232, 242, 252)); Rect(7, 2, 28, 12, 2, cwD);
         Rect(7, 4, 17, 8, 8, cwD); Rect(7, 5, 18, 6, 6, new Color(60, 100, 160));
         Rect(7, 7, 20, 2, 2, new Color(210, 230, 250)); Rect(7, 5, 21, 6, 1, new Color(100, 140, 200)); Rect(7, 7, 18, 1, 6, new Color(100, 140, 200));
+        // nutrient paste dispenser (cell 8)
+        var dm = new Color(120, 130, 120); var dmL = new Color(160, 172, 160); var dmD = new Color(80, 88, 80);
+        Rect(8, 2, 12, 12, 18, dm); Rect(8, 2, 12, 12, 2, dmL); Rect(8, 2, 28, 12, 2, dmD);
+        Rect(8, 4, 3, 8, 8, new Color(170, 200, 150)); Rect(8, 4, 3, 8, 1, new Color(210, 235, 190)); Rect(8, 5, 5, 6, 5, new Color(110, 150, 90));
+        Rect(8, 6, 11, 4, 2, dmD); Rect(8, 7, 17, 2, 4, new Color(40, 44, 40)); Rect(8, 6, 21, 4, 2, new Color(200, 170, 110));
+        Rect(8, 4, 24, 8, 3, dmD);
+        // microwave (cell 9)
+        var mw = new Color(196, 200, 206); var mwD = new Color(120, 126, 136);
+        Rect(9, 1, 16, 14, 13, mw); Rect(9, 1, 16, 14, 2, new Color(226, 230, 236)); Rect(9, 1, 27, 14, 2, mwD);
+        Rect(9, 3, 18, 7, 8, new Color(36, 44, 56)); Rect(9, 4, 19, 5, 1, new Color(70, 86, 110)); Rect(9, 4, 22, 2, 2, new Color(255, 200, 90));
+        Rect(9, 11, 18, 3, 8, mwD); Set(9, 12, 20, new Color(80, 220, 110)); Set(9, 12, 22, new Color(220, 80, 70)); Rect(9, 12, 24, 1, 2, dark);
+        // freezer: a tall white chest-freezer with a latch, frost and a snowflake (last cell)
+        int FZ = PowerItems.Length;
+        var fw = new Color(224, 236, 246); var fwL = new Color(246, 252, 255); var fwD = new Color(150, 176, 204); var fwDD = new Color(100, 128, 160);
+        Rect(FZ, 1, 8, 14, 23, fw); Rect(FZ, 1, 8, 14, 2, fwL); Rect(FZ, 1, 29, 14, 2, fwDD);
+        Rect(FZ, 1, 8, 1, 23, fwL); Rect(FZ, 14, 8, 1, 23, fwD);
+        Rect(FZ, 2, 17, 12, 2, fwD); Rect(FZ, 2, 19, 12, 1, fwDD);               // door seam
+        Rect(FZ, 12, 11, 2, 4, new Color(110, 120, 140)); Rect(FZ, 12, 21, 2, 3, new Color(110, 120, 140));  // handles
+        Set(FZ, 5, 22, new Color(110, 190, 240)); Set(FZ, 4, 23, new Color(110, 190, 240)); Set(FZ, 6, 23, new Color(110, 190, 240));
+        Set(FZ, 5, 23, new Color(190, 230, 250)); Set(FZ, 5, 24, new Color(110, 190, 240)); Set(FZ, 4, 25, new Color(110, 190, 240)); Set(FZ, 6, 25, new Color(110, 190, 240));
+        Set(FZ, 3, 23, new Color(150, 210, 245)); Set(FZ, 7, 23, new Color(150, 210, 245)); Set(FZ, 5, 21, new Color(150, 210, 245)); Set(FZ, 5, 25, new Color(150, 210, 245));
+        Set(FZ, 4, 11, new Color(190, 230, 250)); Set(FZ, 7, 12, new Color(190, 230, 250)); Set(FZ, 9, 10, new Color(190, 230, 250));   // frost sparkles
+        Rect(FZ, 2, 30, 3, 2, dark); Rect(FZ, 11, 30, 3, 2, dark);
         // 4 turret (barrel is drawn on top at runtime)
         var olive = new Color(104, 118, 100); var oliveL = new Color(144, 160, 136); var oliveD = new Color(70, 80, 68);
         Rect(4, 3, 27, 10, 4, oliveD); Rect(4, 5, 25, 6, 2, olive);
@@ -184,16 +230,16 @@ public partial class ModEntry
         Rect(4, 4, 8, 6, 2, oliveL); Rect(4, 3, 14, 10, 3, oliveD);
 
         // 1px dark outline around each sprite
-        for (int cell = 0; cell < PowerItems.Length; cell++)
+        for (int cell = 0; cell < SheetCells; cell++)
         {
             var copy = (Color[])px.Clone();
-            bool Solid(int x, int y) => x >= 0 && x < W && y >= 0 && y < H && copy[y * W * PowerItems.Length + cell * W + x].A > 0;
+            bool Solid(int x, int y) => x >= 0 && x < W && y >= 0 && y < H && copy[y * W * SheetCells + cell * W + x].A > 0;
             for (int y = 0; y < H; y++)
                 for (int x = 0; x < W; x++)
                     if (!Solid(x, y) && (Solid(x - 1, y) || Solid(x + 1, y) || Solid(x, y - 1) || Solid(x, y + 1))) Set(cell, x, y, dark);
         }
 
-        var tex = new Texture2D(Game1.graphics.GraphicsDevice, W * PowerItems.Length, H);
+        var tex = new Texture2D(Game1.graphics.GraphicsDevice, W * SheetCells, H);
         tex.SetData(px);
         powerSheet = tex;
         return tex;
@@ -212,7 +258,7 @@ public partial class ModEntry
     private static string KindOf(SObject o) => o.ItemId[PowerPrefix.Length..] switch
     {
         "PowerPole" => "Pole", "WoodGenerator" => "Generator", "SolarPanel" => "Solar", "PowerBattery" => "Battery", "MiniTurret" => "Turret",
-        "ElectricStove" => "Stove", "Heater" => "Heater", "Cooler" => "Cooler", _ => ""
+        "ElectricStove" => "Stove", "Heater" => "Heater", "Cooler" => "Cooler", "NutrientDispenser" => "Dispenser", "Microwave" => "Microwave", _ => ""
     };
 
     private static double GetD(SObject o, string key, double def = 0) => o.modData.TryGetValue(key, out var s) && double.TryParse(s, out var v) ? v : def;
@@ -229,21 +275,64 @@ public partial class ModEntry
             seen.Add(tile);
             if (!pNodes.TryGetValue(tile, out var n) || n.Obj != o) pNodes[tile] = n = new PNode { Obj = o, Tile = tile, Kind = KindOf(o) };
         }
+
+        // appliances inside buildings join the node list under a unique virtual tile
+        var interiors = new List<(Building b, List<PNode> nodes)>();
+        int bi = 0;
+        foreach (var bld in farm.buildings)
+        {
+            bi++;
+            var indoors = bld.GetIndoors();
+            if (indoors == null) continue;
+            var inside = new List<PNode>();
+            foreach (var (tile, o) in indoors.objects.Pairs)
+            {
+                if (!IsPowerObject(o)) continue;
+                var key = new Vector2(100000 + bi * 200 + tile.X, 100000 + tile.Y);
+                seen.Add(key);
+                if (!pNodes.TryGetValue(key, out var n) || n.Obj != o)
+                    pNodes[key] = n = new PNode { Obj = o, Tile = key, Loc = indoors, RealTile = tile, Kind = KindOf(o) };
+                n.Anchor = new Vector2(bld.tileX.Value + bld.humanDoor.Value.X, bld.tileY.Value + bld.humanDoor.Value.Y + 1);
+                inside.Add(n);
+            }
+            if (inside.Count > 0) interiors.Add((bld, inside));
+        }
         foreach (var k in pNodes.Keys.Where(k => !seen.Contains(k)).ToList()) pNodes.Remove(k);
 
         // union-find over linked nodes
         var list = pNodes.Values.ToList();
+        var index = new Dictionary<PNode, int>();
+        for (int i = 0; i < list.Count; i++) index[list[i]] = i;
         var parent = list.Select((_, i) => i).ToArray();
         int Find(int i) { while (parent[i] != i) i = parent[i] = parent[parent[i]]; return i; }
         pLinks.Clear();
         for (int i = 0; i < list.Count; i++)
+        {
+            if (list[i].Loc != null) continue;
             for (int j = i + 1; j < list.Count; j++)
             {
+                if (list[j].Loc != null) continue;
                 float range = list[i].Kind == "Pole" || list[j].Kind == "Pole" ? PoleRange : LinkRange;
                 if (Vector2.Distance(list[i].Tile, list[j].Tile) > range) continue;
                 parent[Find(i)] = Find(j);
                 pLinks.Add((list[i], list[j]));
             }
+        }
+        // a building is wired up if a producer or pole stands right outside it; everything inside shares one wiring
+        foreach (var (bld, inside) in interiors)
+        {
+            for (int k = 1; k < inside.Count; k++) parent[Find(index[inside[k]])] = Find(index[inside[0]]);
+            var area = new Rectangle(bld.tileX.Value, bld.tileY.Value, bld.tilesWide.Value, bld.tilesHigh.Value);
+            foreach (var feeder in list)
+            {
+                if (feeder.Loc != null || feeder.Kind is not ("Pole" or "Generator" or "Solar" or "Battery")) continue;
+                float dx = Math.Max(Math.Max(area.Left - feeder.Tile.X, feeder.Tile.X - (area.Right - 1)), 0);
+                float dy = Math.Max(Math.Max(area.Top - feeder.Tile.Y, feeder.Tile.Y - (area.Bottom - 1)), 0);
+                if (Math.Max(dx, dy) > FeedReach) continue;
+                parent[Find(index[feeder])] = Find(index[inside[0]]);
+                pLinks.Add((feeder, inside[0]));
+            }
+        }
         grids.Clear();
         var ids = new Dictionary<int, int>();
         for (int i = 0; i < list.Count; i++)
@@ -271,6 +360,8 @@ public partial class ModEntry
                 case "Solar": n.Supply = SolarPeakWatts * sun; g.Supply += n.Supply; break;
                 case "Turret": n.Demand = TurretWatts; g.Demand += n.Demand; break;
                 case "Stove": n.Demand = 150; g.Demand += n.Demand; break;
+                case "Dispenser": n.Demand = 150; g.Demand += n.Demand; break;
+                case "Microwave": n.Demand = 100; g.Demand += n.Demand; break;
                 case "Heater": case "Cooler": n.Demand = 250; g.Demand += n.Demand; break;
                 case "Battery": g.Charge += GetD(n.Obj, ChargeKey); g.Capacity += BatteryCapWh; break;
             }
@@ -315,7 +406,7 @@ public partial class ModEntry
             foreach (var b in bats) SetD(b.Obj, ChargeKey, grids[gi].Charge / bats.Count);
         }
         foreach (var n in pNodes.Values)
-            if (n.Kind is "Turret" or "Battery" or "Solar" or "Pole" or "Stove" or "Heater" or "Cooler") n.Online = grids[n.Grid].Satisfaction >= 0.5 && (n.Kind != "Solar" || n.Supply > 1);
+            if (n.Kind is "Turret" or "Battery" or "Solar" or "Pole" or "Stove" or "Heater" or "Cooler" or "Dispenser" or "Microwave") n.Online = grids[n.Grid].Satisfaction >= 0.5 && (n.Kind != "Solar" || n.Supply > 1);
     }
 
     private int lastPowerScan = -999;
@@ -343,7 +434,7 @@ public partial class ModEntry
         float range = TurretRangeTiles * 64f;
         foreach (var n in pNodes.Values)
         {
-            if (n.Kind != "Turret") continue;
+            if (n.Kind != "Turret" || n.Loc != null) continue;
             var head = TurretHead(n);
             n.Target = null;
             if (!n.Online || monsters.Count == 0 || GetD(n.Obj, AmmoKey) < 1) continue;
@@ -433,7 +524,7 @@ public partial class ModEntry
 
     private string Describe(SObject o, string kind)
     {
-        pNodes.TryGetValue(o.TileLocation, out var n);
+        var n = pNodes.Values.FirstOrDefault(x => x.Obj == o);
         var g = n != null && n.Grid < grids.Count ? grids[n.Grid] : null;
         string grid = g == null ? "" : $" Grid: {g.Supply:0}/{g.Demand:0} W, battery {g.Charge:0}/{g.Capacity:0} Wh.";
         return kind switch
@@ -443,6 +534,8 @@ public partial class ModEntry
             "Solar" => $"Solar panel: {(n?.Supply ?? 0):0} W now.{grid}",
             "Turret" => $"Mini-turret: {(n?.Online == true ? "online" : "NO POWER")}, ammo {GetD(o, AmmoKey):0}/{MaxAmmo:0}.{grid}",
             "Stove" => $"Electric stove: {(n?.Online == true ? "powered" : "NO POWER")}.{grid}",
+            "Dispenser" => $"Nutrient paste dispenser: {GetD(o, PasteKey):0} meals loaded, {(n?.Online == true ? "powered" : "NO POWER")}.{grid}",
+            "Microwave" => $"Microwave: {(n?.Online == true ? "powered" : "NO POWER")}.{grid}",
             "Heater" => $"Heater: {(n?.Online == true ? "warming" : "NO POWER")}.{grid}",
             "Cooler" => $"Cooler: {(n?.Online == true ? "cooling" : "NO POWER")}.{grid}",
             _ => $"Power pole.{grid}"
@@ -452,7 +545,18 @@ public partial class ModEntry
     // ---------- drawing ----------
     private void DrawPower(object? sender, RenderedWorldEventArgs e)
     {
-        if (!Context.IsWorldReady || Game1.currentLocation != Game1.getFarm() || pNodes.Count == 0) return;
+        if (!Context.IsWorldReady || pNodes.Count == 0) return;
+        if (Game1.currentLocation != Game1.getFarm())
+        {
+            // inside a building: just show a status lamp over each powered appliance
+            foreach (var n in pNodes.Values)
+            {
+                if (n.Loc != Game1.currentLocation) continue;
+                var lamp = Game1.GlobalToLocal(Game1.viewport, new Vector2(n.RealTile.X * 64 + 27, n.RealTile.Y * 64 - 78));
+                e.SpriteBatch.Draw(Game1.fadeToBlackRect, new Rectangle((int)lamp.X, (int)lamp.Y, 10, 10), n.Online ? new Color(90, 230, 110) : new Color(230, 70, 60));
+            }
+            return;
+        }
         var b = e.SpriteBatch;
         bool carrying = Game1.player.CurrentItem is { } ci && ci.ItemId?.StartsWith(PowerPrefix) == true;
         var vp = new Rectangle(Game1.viewport.X - 200, Game1.viewport.Y - 200, Game1.viewport.Width + 400, Game1.viewport.Height + 400);
@@ -460,7 +564,7 @@ public partial class ModEntry
         // wires
         foreach (var (a, c) in pLinks)
         {
-            var p1 = new Vector2(a.Tile.X * 64 + 32, a.Tile.Y * 64 - 24); var p2 = new Vector2(c.Tile.X * 64 + 32, c.Tile.Y * 64 - 24);
+            var p1 = new Vector2(a.Pos.X * 64 + 32, a.Pos.Y * 64 - 24); var p2 = new Vector2(c.Pos.X * 64 + 32, c.Pos.Y * 64 - (c.Loc != null ? -8 : 24));
             if (!vp.Contains(p1.ToPoint()) && !vp.Contains(p2.ToPoint())) continue;
             var s1 = Game1.GlobalToLocal(Game1.viewport, p1); var s2 = Game1.GlobalToLocal(Game1.viewport, p2);
             bool live = grids[a.Grid].Satisfaction >= 0.5;
@@ -470,6 +574,7 @@ public partial class ModEntry
 
         foreach (var n in pNodes.Values)
         {
+            if (n.Loc != null) continue;
             var world = new Vector2(n.Tile.X * 64, n.Tile.Y * 64);
             if (!vp.Contains(world.ToPoint())) continue;
             var screen = Game1.GlobalToLocal(Game1.viewport, world);
@@ -506,10 +611,12 @@ public partial class ModEntry
 
     private void DrawPowerHud(object? sender, RenderedHudEventArgs e)
     {
-        if (!Context.IsWorldReady || Game1.currentLocation != Game1.getFarm() || grids.Count == 0 || Game1.activeClickableMenu != null) return;
+        if (!Context.IsWorldReady || grids.Count == 0 || Game1.activeClickableMenu != null) return;
+        bool onFarm = Game1.currentLocation == Game1.getFarm();
         bool carrying = Game1.player.CurrentItem is { } ci && ci.ItemId?.StartsWith(PowerPrefix) == true;
-        PNode? near = pNodes.Values.OrderBy(n => Vector2.Distance(n.Tile, Game1.player.Tile)).FirstOrDefault();
-        if (near == null || (!carrying && Vector2.Distance(near.Tile, Game1.player.Tile) > 8)) return;
+        PNode? near = pNodes.Values.Where(n => onFarm ? n.Loc == null : n.Loc == Game1.currentLocation)
+            .OrderBy(n => Vector2.Distance(n.Loc == null ? n.Tile : n.RealTile, Game1.player.Tile)).FirstOrDefault();
+        if (near == null || (!carrying && Vector2.Distance(near.Loc == null ? near.Tile : near.RealTile, Game1.player.Tile) > 8)) return;
         var g = grids[near.Grid];
         string line1 = $"Power grid: {g.Supply:0} W in / {g.Demand:0} W used";
         string line2 = g.Capacity > 0 ? $"Battery {g.Charge:0}/{g.Capacity:0} Wh" : "No battery";

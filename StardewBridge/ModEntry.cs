@@ -107,6 +107,7 @@ public partial class ModEntry : Mod
         SyncHands(true);
         SendDayStartNpcEvents();
         ReportTrampling();
+        SpoilOvernight();
         ApplyRecipeGating();
     }
 

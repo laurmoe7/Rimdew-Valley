@@ -490,6 +490,8 @@ public partial class ModEntry
                     "repair" => a.Current.Fetched ? "repairing" : "fetching fiber",
                     "cook" => a.Current.Fetched ? "cooking" : "fetching food",
                     "eat" => "eating",
+                    "stock" => a.Current.Fetched ? "stocking dispenser" : "fetching food",
+                    "heat" => a.Current.Fetched ? "microwaving" : "fetching frozen food",
                     _ => "feeding"
                 };
                 if (++a.WorkTimer >= WorkTicks)
@@ -517,6 +519,7 @@ public partial class ModEntry
             if (j.Stand.HasValue && j.StandPhase == j.Fetched) return j.Stand.Value;
             // Pick an open tile around the target that no other hand is standing on or heading to, so two hands never fight over a spot.
             var target = j.Via.HasValue && !j.Fetched ? j.Via.Value : j.Tile;
+            if (pNodes.TryGetValue(target, out var tn)) target = tn.Pos;   // appliances inside a building are used from its door
             var taken = new List<Vector2>();
             foreach (var other in actors.Values)
             {
@@ -606,6 +609,8 @@ public partial class ModEntry
             case "reload":
             case "repair":
             case "cook":
+            case "stock":
+            case "heat":
             case "eat":
                 DoMaintenance(j);
                 break;
