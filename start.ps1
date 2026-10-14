@@ -48,15 +48,15 @@ if ($Test -eq "power") { New-Item -ItemType File -Force -Path "$modDir\dev_power
 if ($Test -eq "indoor") { New-Item -ItemType File -Force -Path "$modDir\dev_indoortest.flag" | Out-Null }
 if ($Test -eq "chest") { New-Item -ItemType File -Force -Path "$modDir\dev_chesttest.flag" | Out-Null }
 if ($Test -eq "food") { New-Item -ItemType File -Force -Path "$modDir\dev_foodtest.flag" | Out-Null }
+if ($Test -eq "raid") { New-Item -ItemType File -Force -Path "$modDir\dev_raidtest.flag" | Out-Null }
 if (-not (Get-Process "StardewModdingAPI" -ErrorAction SilentlyContinue)) {
-    Start-Process "$stardew\StardewModdingAPI.exe" -WorkingDirectory $stardew
+    Start-Process "$stardew\StardewModdingAPI.exe" -WorkingDirectory $stardew -WindowStyle Minimized
     Write-Host "Launching Stardew via SMAPI."
     $sv = $null; $t = 0
     while (-not $sv -and $t -lt 90) {
         Start-Sleep 2; $t += 2
         $sv = Get-Process "Stardew Valley" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
     }
-    if ($sv) { [Win]::SetForegroundWindow($sv.MainWindowHandle) | Out-Null }
 }
 Write-Host "Done. Play Stardew; RimWorld is running minimized in the background."
 

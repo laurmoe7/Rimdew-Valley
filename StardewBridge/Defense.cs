@@ -133,7 +133,13 @@ public partial class ModEntry
 
             // traps: triggered by the monster's centre tile
             var tile = new Vector2(box.Center.X / 64, box.Center.Y / 64);
-            if (farm.objects.TryGetValue(tile, out var t) && IsTrap(t) && (!trapCooldown.TryGetValue(m.GetHashCode(), out int until) || ticks >= until))
+            bool sapper = m.modData.ContainsKey(SapperKey);
+            if (sapper && farm.objects.TryGetValue(tile, out var armed) && IsTrap(armed))
+            {
+                farm.objects.Remove(tile);   // sappers defuse traps instead of setting them off
+                Defenses.Add("sapper defused a trap");
+            }
+            else if (farm.objects.TryGetValue(tile, out var t) && IsTrap(t) && (!trapCooldown.TryGetValue(m.GetHashCode(), out int until) || ticks >= until))
             {
                 trapCooldown[m.GetHashCode()] = ticks + 30;
                 if (t.ItemId.EndsWith("ExplosiveTrap"))
@@ -157,7 +163,7 @@ public partial class ModEntry
             if (ticks % 30 == 0)
                 foreach (var (sTile, sb) in SandbagsNear(farm, box))
                 {
-                    int hp = (int)(sb.modData.TryGetValue(HpKey, out var hs) && int.TryParse(hs, out var h) ? h : SandbagHp) - 8;
+                    int hp = (int)(sb.modData.TryGetValue(HpKey, out var hs) && int.TryParse(hs, out var h) ? h : SandbagHp) - (sapper ? 40 : 8);
                     if (hp <= 0) { farm.objects.Remove(sTile); farm.playSound("woodWhack"); Defenses.Add("sandbag destroyed"); }
                     else sb.modData[HpKey] = hp.ToString();
                 }

@@ -15,7 +15,7 @@ namespace StardewBridge;
 public partial class ModEntry
 {
     private string? autoloadSave;
-    private bool powerTest, foodTest, chestTest, indoorTest;
+    private bool powerTest, foodTest, chestTest, indoorTest, raidTest;
     private int ptStart = -1;
     private int ptKills0;
     private bool autoloadStarted;
@@ -36,6 +36,10 @@ public partial class ModEntry
         string inf = Path.Combine(Helper.DirectoryPath, "dev_indoortest.flag");
         indoorTest = File.Exists(inf);
         if (indoorTest) { try { File.Delete(inf); } catch { } }
+        string rf = Path.Combine(Helper.DirectoryPath, "dev_raidtest.flag");
+        raidTest = File.Exists(rf);
+        if (raidTest) { try { File.Delete(rf); } catch { } }
+        Helper.Events.GameLoop.UpdateTicked += (_, e) => TickRaidTest(e);
         Helper.Events.GameLoop.UpdateTicked += (_, e) => TickIndoorTest(e);
         Helper.Events.GameLoop.UpdateTicked += (_, e) => TickChestTest(e);
         Helper.Events.GameLoop.UpdateTicked += (_, e) => TickFoodTest(e);

@@ -265,7 +265,7 @@ public partial class ModEntry
 
     /// <summary>A normal damaging projectile that is drawn as a RimWorld bullet: a tracer rotated along its flight
     /// path with a short fading trail.</summary>
-    private class GunBullet : BasicProjectile
+    internal class GunBullet : BasicProjectile
     {
         private readonly Texture2D? sprite;
         private readonly float length;

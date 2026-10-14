@@ -207,18 +207,50 @@ public partial class ModEntry
         return pool.Count > 0;
     }
 
-    /// <summary>True if every tile between the two (exclusive) is open ground, i.e. a bullet would not hit terrain first.</summary>
+    /// <summary>True if a bullet flying from the middle of one tile to the middle of the other would not hit terrain first.
+    /// The path is sampled every 16 px (not tile by tile) so it cannot slip diagonally between two solid corners; sandbags
+    /// are low cover that bullets fly over.</summary>
     private bool HasLineOfSight(Point from, Point to)
     {
-        int x0 = from.X, y0 = from.Y, x1 = to.X, y1 = to.Y;
-        int dx = Math.Abs(x1 - x0), dy = -Math.Abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx + dy;
-        while (true)
+        var a = new Vector2(from.X * 64 + 32, from.Y * 64 + 32);
+        var b = new Vector2(to.X * 64 + 32, to.Y * 64 + 32);
+        float len = Vector2.Distance(a, b);
+        int steps = (int)(len / 16f);
+        var farm = Game1.getFarm();
+        Point last = from;
+        for (int i = 1; i < steps; i++)
         {
-            if ((x0 != from.X || y0 != from.Y) && (x0 != x1 || y0 != y1) && !Walkable(new Point(x0, y0))) return false;
-            if (x0 == x1 && y0 == y1) return true;
-            int e2 = 2 * err;
-            if (e2 >= dy) { err += dy; x0 += sx; }
-            if (e2 <= dx) { err += dx; y0 += sy; }
+            var p = Vector2.Lerp(a, b, i / (float)steps);
+            var t = new Point((int)(p.X / 64), (int)(p.Y / 64));
+            if (t == last || t == from || t == to) continue;
+            last = t;
+            if (BulletBlocked(farm, t)) return false;
         }
+        return true;
+    }
+
+    private readonly Dictionary<Point, bool> bulletCache = new();
+    private int bulletCacheTick = -100;
+
+    /// <summary>Would a bullet stop on this tile? Terrain, bushes, stumps and objects do; monsters standing nearby do not
+    /// (the walkability check counts them as obstacles, which wrongly blocked point-blank shots), and sandbags are fly-over cover.
+    /// Cached for a third of a second.</summary>
+    private bool BulletBlocked(GameLocation farm, Point t)
+    {
+        if ((int)Game1.ticks - bulletCacheTick > 20) { bulletCache.Clear(); bulletCacheTick = (int)Game1.ticks; }
+        if (bulletCache.TryGetValue(t, out var cached)) return cached;
+        bool blocked = false;
+        var vec = new Vector2(t.X, t.Y);
+        if (farm.objects.TryGetValue(vec, out var o) && (IsSandbag(o) || IsTrap(o))) { }
+        else if (!Walkable(t))
+        {
+            var rect = new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52);
+            bool monsterOnly = farm.characters.OfType<StardewValley.Monsters.Monster>().Any(m => m.GetBoundingBox().Intersects(rect))
+                               && farm.isTilePassable(new xTile.Dimensions.Location(t.X, t.Y), Game1.viewport)
+                               && !farm.objects.ContainsKey(vec);
+            blocked = !monsterOnly;
+        }
+        bulletCache[t] = blocked;
+        return blocked;
     }
 }

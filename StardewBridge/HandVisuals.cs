@@ -340,9 +340,20 @@ public partial class ModEntry
         a.Activity = "defending";
 
         var feet = a.Pos + new Vector2(32, 32);   // a character's standing point is the middle of its 64px box
-        var target = monsters.OrderBy(m => Vector2.DistanceSquared(m.Position, feet)).First();
+        // Prefer a monster with a clear shot (nearest first); only when none has one, head for the nearest and manoeuvre.
+        var here = ToTile(a.Pos);
+        var target = monsters.OrderBy(m => HasLineOfSight(here, ToTile(m.Position)) ? 0 : 1)
+                             .ThenBy(m => Vector2.DistanceSquared(m.Position, feet)).First();
         var to = target.Position + new Vector2(32, 32) - feet;
         float dist = to.Length();
+        // Lead a moving target: aim where it will be when the bullet arrives.
+        var vel = MonsterVelocity(target);
+        if (vel.LengthSquared() > 0.04f)
+        {
+            var lead = to;
+            for (int i = 0; i < 2; i++) lead = target.Position + new Vector2(32, 32) + vel * (lead.Length() / gun.Speed) - feet;
+            to = lead;
+        }
         a.Aim = (float)Math.Atan2(to.Y, to.X);
         a.Dir = Math.Abs(to.X) > Math.Abs(to.Y) ? (to.X > 0 ? 1 : 3) : (to.Y > 0 ? 0 : 2);
 
@@ -364,7 +375,7 @@ public partial class ModEntry
         a.StuckTicks = Vector2.DistanceSquared(a.Pos, a.LastPos) < 0.25f ? a.StuckTicks + 1 : 0;
         a.LastPos = a.Pos;
         if (!clear && a.StuckTicks == 90) { LogStuck(a, monsterTile, dist); RescueHand(a); }
-        if (!clear && a.StuckTicks > 150 && dist <= 520) clear = true;
+        if (!clear && a.StuckTicks > 150 && dist <= 520 && HasLineOfSight(ToTile(a.Pos), monsterTile)) clear = true;
 
         if (clear && Game1.ticks >= a.NextShot)
         {
@@ -372,7 +383,11 @@ public partial class ModEntry
             a.LastShot = (int)Game1.ticks;
             a.XpShooting++;
             int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
-            var muzzle = HandPosFor(feet, facing, a.Dir is 1 or 3) + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
+            // Aim from the gun hand (not the feet), so the bullet's line passes through the target however far the hand is from the body.
+            var gunHand = HandPosFor(feet, facing, a.Dir is 1 or 3);
+            var aimAt = feet + to - gunHand;
+            if (aimAt.LengthSquared() > 16f) a.Aim = (float)Math.Atan2(aimAt.Y, aimAt.X);
+            var muzzle = gunHand + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
             PlayGunShot(gun, muzzle);
             float spread = (float)((Game1.random.NextDouble() - 0.5) * 0.25 / (1 + skill * 0.15));
             int pellets = gun.Pellets;
@@ -418,6 +433,20 @@ public partial class ModEntry
     }
 
     private readonly List<(int tick, int count, string kind)> pendingSpawns = new();
+    private readonly Dictionary<StardewValley.Monsters.Monster, (Vector2 pos, Vector2 vel)> monsterMotion = new();
+
+    private void UpdateMonsterVelocities()
+    {
+        var live = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
+        foreach (var gone in monsterMotion.Keys.Where(k => !live.Contains(k)).ToList()) monsterMotion.Remove(gone);
+        foreach (var m in live)
+        {
+            var v = monsterMotion.TryGetValue(m, out var old) ? old.vel * 0.8f + (m.Position - old.pos) * 0.2f : Vector2.Zero;
+            monsterMotion[m] = (m.Position, v);
+        }
+    }
+
+    private Vector2 MonsterVelocity(StardewValley.Monsters.Monster m) => monsterMotion.TryGetValue(m, out var e) ? e.vel : Vector2.Zero;
 
     private void TickHands()
     {
@@ -430,6 +459,7 @@ public partial class ModEntry
             }
 
         if (Game1.ticks % 300 == 0) { walkCache.Clear(); RefreshHomes(); }
+        UpdateMonsterVelocities();
         TickMaintenance();
         var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)

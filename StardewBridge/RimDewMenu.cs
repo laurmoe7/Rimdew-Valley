@@ -399,6 +399,8 @@ public partial class RimDewMenu : IClickableMenu
                 ("Clear monsters", mod.ClearMonsters), ("Time: 6pm", () => mod.SetTime(1800)) }),
             ("Monsters", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
+                ("Sappers x4", () => mod.SpawnMonsters(4, "sapper")), ("Drop pod x4", () => mod.SpawnMonsters(4, "podbrute")),
+                ("Mech cluster x3", () => mod.SpawnMonsters(3, "golem")), ("Manhunters x4", () => mod.SpawnMonsters(4, "manhunter")),
                 ("Weapons kit", mod.GiveWeaponsKit) }),
             ("RimWorld guns", new (string, Action)[] { ("All guns", mod.GiveAllGuns),
                 ("Revolver", () => mod.GiveGunById("Revolver")), ("Assault rifle", () => mod.GiveGunById("AssaultRifle")),
