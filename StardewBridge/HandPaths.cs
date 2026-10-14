@@ -20,7 +20,8 @@ public partial class ModEntry
         var farm = Game1.getFarm();
         bool ok = t.X >= 0 && t.Y >= 0 && t.X < farm.map.Layers[0].LayerWidth && t.Y < farm.map.Layers[0].LayerHeight
                   && farm.isTilePassable(new xTile.Dimensions.Location(t.X, t.Y), Game1.viewport)
-                  && !farm.isCollidingPosition(new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52), Game1.viewport, false, 0, false, null, pathfinding: true);
+                  // Farmer-mode collision: the version that correctly reports open ground (the NPC-pathfinding mode reported every tile blocked).
+                  && !farm.isCollidingPosition(new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52), Game1.viewport, true, 0, false, Game1.player);
         walkCache[t] = ok;
         return ok;
     }
