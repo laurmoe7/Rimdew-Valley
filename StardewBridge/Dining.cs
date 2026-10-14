@@ -47,7 +47,7 @@ public partial class ModEntry
         if (a.MealPaste)
         {
             data.Hunger[a.Name] = Math.Max(0, HungerOf(a.Name) - 45);
-            SendNpcEvent(a.Name, "ate_paste");
+            SendHandEvent(a.Name, "ate_paste");
             Defenses.Add($"{a.Name} ate nutrient paste at the table");
         }
         else if (a.Meal != null)

@@ -95,7 +95,7 @@ namespace RimDewBridge
                     foreach (var n in m.List("npcs")) Ensure("npc:" + n, Convert.ToString(n));
                     Ensure("farmer", "Farmer");
                     break;
-                case "npc_event": NpcEvent(m.Str("npc"), m.Str("kind")); break;
+                case "npc_event": NpcEvent(m.Str("npc"), m.Str("kind"), m.Bool("hand")); break;
                 case "player_hurt": Hurt(m.Num("amount"), m.Str("kind")); break;
                 case "heal_all": HealAll(); break;
                 case "tend": Tend((float)m.Num("quality", 0.4)); break;
@@ -161,11 +161,11 @@ namespace RimDewBridge
             return string.Concat(kind.Split('_').Select(s => s.Length == 0 ? s : char.ToUpper(s[0]) + s.Substring(1)));
         }
 
-        private void NpcEvent(string npc, string kind)
+        private void NpcEvent(string npc, string kind, bool hand = false)
         {
             // The farmer feels good about every chat and festival too.
             if (kind == "talked" || kind == "festival") { var farmer = Get("farmer"); if (farmer != null) GainThought(farmer, kind); }
-            var p = Get("npc:" + npc) ?? Get("hand:" + npc);
+            var p = hand ? Get("hand:" + npc) : (Get("npc:" + npc) ?? Get("hand:" + npc));
             if (p == null || p.needs == null) return;
             GainThought(p, kind);
             if (p.needs.joy != null)

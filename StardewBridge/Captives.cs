@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using Newtonsoft.Json.Linq;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
@@ -38,6 +39,52 @@ public partial class ModEntry
         data.Captives.Add(raider.RaiderName + "|" + raider.Look);
         Game1.playSound("coin");
         Hud($"Captured {raider.RaiderName}! ({data.Captives.Count} captive{(data.Captives.Count == 1 ? "" : "s")})", HUDMessage.achievement_type);
+    }
+
+    // Captives are stored as "Name|Look|lastRecruitAttemptDay".
+    private static string CaptiveName(string c) => c.Split('|')[0];
+
+    /// <summary>Try to turn a captive into a farmhand: 55% per try, one try per captive per day.</summary>
+    internal void RecruitCaptive(int index)
+    {
+        if (index < 0 || index >= data.Captives.Count) return;
+        var parts = data.Captives[index].Split('|');
+        string name = parts[0];
+        long today = Game1.stats.DaysPlayed;
+        if (parts.Length > 2 && long.TryParse(parts[2], out var last) && last == today) { Hud($"{name} has already refused today. Try again tomorrow.", HUDMessage.error_type); return; }
+        if (Game1.random.NextDouble() >= 0.55)
+        {
+            data.Captives[index] = $"{name}|{(parts.Length > 1 ? parts[1] : "")}|{today}";
+            Hud($"{name} refuses to join you. Try again tomorrow.", HUDMessage.error_type);
+            return;
+        }
+        string hand = name;
+        for (int n = 2; data.Hands.Contains(hand); n++) hand = name + n;
+        data.Captives.RemoveAt(index);
+        data.Hands.Add(hand);
+        Send(new JObject { ["type"] = "hire", ["name"] = hand });
+        SyncHands(false);
+        foreach (var other in data.Hands.Where(h => h != hand)) SendHandEvent(other, "recruited");
+        Game1.playSound("achievement");
+        Hud($"{hand} joined the farm as a farmhand! ({DailyWage}g/day)", HUDMessage.achievement_type);
+    }
+
+    internal void ReleaseCaptive(int index)
+    {
+        if (index < 0 || index >= data.Captives.Count) return;
+        string name = CaptiveName(data.Captives[index]);
+        data.Captives.RemoveAt(index);
+        Hud($"You let {name} go.", HUDMessage.newQuest_type);
+    }
+
+    internal void ExecuteCaptive(int index)
+    {
+        if (index < 0 || index >= data.Captives.Count) return;
+        string name = CaptiveName(data.Captives[index]);
+        data.Captives.RemoveAt(index);
+        foreach (var hand in data.Hands) SendHandEvent(hand, "executed");
+        Game1.playSound("hitEnemy");
+        Hud($"{name} was executed. Your farmhands are disturbed.", HUDMessage.error_type);
     }
 
     /// <summary>Custom monster types cannot be written to a save file, so no raider may be on the farm when the game saves.</summary>

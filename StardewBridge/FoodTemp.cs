@@ -34,8 +34,8 @@ public partial class ModEntry
             double h = Math.Min(100, HungerOf(name) + HungerPerHour * hours);
             data.Hunger[name] = h;
             hungerStage.TryGetValue(name, out int stage);
-            if (h >= StarvingAt && stage < 2) { hungerStage[name] = 2; SendNpcEvent(name, "starving"); }
-            else if (h >= HungryAt && stage < 1) { hungerStage[name] = 1; SendNpcEvent(name, "hungry"); }
+            if (h >= StarvingAt && stage < 2) { hungerStage[name] = 2; SendHandEvent(name, "starving"); }
+            else if (h >= HungryAt && stage < 1) { hungerStage[name] = 1; SendHandEvent(name, "hungry"); }
             else if (h < EatAt && stage != 0) hungerStage[name] = 0;
         }
 
@@ -103,7 +103,7 @@ public partial class ModEntry
             SetD(disp, PasteKey, GetD(disp, PasteKey) - 1);
             if (actors.TryGetValue(j.Owner, out var pa) && FindDiningSeat(pa) != null) { pa.MealPaste = true; Defenses.Add($"{j.Owner} takes paste to the table"); return; }
             data.Hunger[j.Owner] = Math.Max(0, HungerOf(j.Owner) - 45);
-            SendNpcEvent(j.Owner, "ate_paste");
+            SendHandEvent(j.Owner, "ate_paste");
             Defenses.Add($"{j.Owner} ate nutrient paste");
             return;
         }
@@ -124,7 +124,7 @@ public partial class ModEntry
         int grade = FoodGrade(food);
         data.Hunger[who] = Math.Max(0, HungerOf(who) - grade switch { 3 => 70, 2 => 35, _ => 30 });
         string kind = unthawed ? "ate_frozen" : grade switch { 3 => "ate_meal", 2 => "ate_snack", _ => "ate_raw" };
-        SendNpcEvent(who, kind);
+        SendHandEvent(who, kind);
         Defenses.Add($"{who} ate {(unthawed ? "frozen food" : grade == 3 ? "a meal" : grade == 2 ? "a snack" : "raw food")}");
         if (Game1.currentLocation is StardewValley.Farm) Game1.playSound("eat");
     }
@@ -215,7 +215,7 @@ public partial class ModEntry
             string key = $"{a.Name}|{status}|{Game1.stats.DaysPlayed}|{Game1.timeOfDay / 1000}";
             if (climateSent.ContainsKey(key)) continue;
             climateSent[key] = ticks;
-            SendNpcEvent(a.Name, status);
+            SendHandEvent(a.Name, status);
             Defenses.Add($"{a.Name} is {status}");
         }
         if (climateSent.Count > 400) climateSent.Clear();

@@ -395,19 +395,23 @@ public partial class RimDewMenu : IClickableMenu
         DrawCaptives(b, c.Y + 96 + hands.Count * 40 + 14);
     }
 
-    /// <summary>Captured raiders, one per line (as many as fit under the hand list).</summary>
+    /// <summary>Captured raiders: recruit (55% a day), release or execute each one (as many rows as fit under the hand list).</summary>
     private void DrawCaptives(SpriteBatch b, int y)
     {
         var c = Content;
         var caps = mod.Data.Captives;
-        if (y > c.Bottom - 30) return;
+        if (y > c.Bottom - 40) return;
         Text(b, caps.Count == 0 ? "Captives: none (downed raiders can be captured with right-click)" : $"Captives ({caps.Count})", c.X, y, caps.Count == 0 ? Color.Gray : Game1.textColor);
         for (int i = 0; i < caps.Count; i++)
         {
-            int ry = y + 32 + i * 30;
-            if (ry > c.Bottom - 30) { Text(b, $"... and {caps.Count - i} more", c.X + 20, Math.Min(ry, c.Bottom - 30), Color.Gray); break; }
+            int ry = y + 32 + i * 40;
+            if (ry > c.Bottom - 40) { Text(b, $"... and {caps.Count - i} more", c.X + 20, Math.Min(ry, c.Bottom - 30), Color.Gray); break; }
             var parts = caps[i].Split('|');
-            Text(b, "- " + parts[0] + (parts.Length > 1 ? $" (looks like {parts[1]})" : ""), c.X + 20, ry);
+            int idx = i;
+            Text(b, "- " + parts[0] + (parts.Length > 1 ? $" ({parts[1]})" : ""), c.X + 20, ry + 4);
+            Button(b, new Rectangle(c.X + 320, ry, 130, 36), "Recruit", () => mod.RecruitCaptive(idx));
+            Button(b, new Rectangle(c.X + 460, ry, 130, 36), "Release", () => mod.ReleaseCaptive(idx));
+            Button(b, new Rectangle(c.X + 600, ry, 130, 36), "Execute", () => mod.ExecuteCaptive(idx));
         }
     }
 

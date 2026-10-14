@@ -1,3 +1,4 @@
+using Newtonsoft.Json.Linq;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -62,8 +63,31 @@ public partial class ModEntry
             foreach (var c in new[] { "Vex|Marlon", "Rook|Gus", "Mara|Pam" }) data.Captives.Add(c);
             Game1.activeClickableMenu = new RimDewMenu(this, 2);
         }
-        if (t == 200) MenuShot("colony_captives");
-        if (t == 230) { data.Captives.Clear(); Game1.exitActiveMenu(); Rt("COLONY done"); colDone = true; }
+        if (t == 200) { MenuShot("colony_captives"); }
+        if (t == 230)
+        {
+            Game1.exitActiveMenu();
+            // recruit Vex (retrying: it is a 55% roll and one try a day), release Rook, execute Mara
+            int tries = 0;
+            while (data.Captives.Any(c => c.StartsWith("Vex")) && tries++ < 40)
+            {
+                int vi = data.Captives.FindIndex(c => c.StartsWith("Vex"));
+                data.Captives[vi] = "Vex|Marlon";
+                RecruitCaptive(vi);
+            }
+            Rt($"PRISON recruit took {tries} tries; hands now [{string.Join(", ", data.Hands)}]");
+            ReleaseCaptive(data.Captives.FindIndex(c => c.StartsWith("Rook")));
+            ExecuteCaptive(data.Captives.FindIndex(c => c.StartsWith("Mara")));
+            Rt($"PRISON captives left [{string.Join(", ", data.Captives)}]");
+        }
+        if (t == 800) RefreshRimWorld();
+        if (t == 1000)
+        {
+            foreach (var h in LastHands)
+                Rt($"PRISON hand {(string?)h["name"]} mood={(double)h["mood"]!:0.00} traits=[{TraitSummary((string)h["name"]!)}] thoughts=[{string.Join("; ", ((JArray)h["thoughts"]!).Select(x => (string)x["label"]! + " " + (double)x["offset"]!))}]");
+            data.Hands.Remove("Vex"); Send(new JObject { ["type"] = "fire", ["name"] = "Vex" }); SyncHands(false);
+            Rt("COLONY done"); colDone = true;
+        }
     }
 
     private bool cabinDone;

@@ -41,6 +41,10 @@ public partial class ModEntry
         }
     }
 
+    /// <summary>An event for a farmhand. Marked so RimWorld does not hand it to a villager of the same name (hands may be called Sam or Alex).</summary>
+    private void SendHandEvent(string hand, string kind) =>
+        Send(new JObject { ["type"] = "npc_event", ["npc"] = hand, ["kind"] = kind, ["hand"] = true });
+
     private void SendNpcEvent(string npc, string kind) =>
         Send(new JObject { ["type"] = "npc_event", ["npc"] = npc, ["kind"] = kind });
 

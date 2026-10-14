@@ -277,4 +277,26 @@
       <baseMoodEffect>-6</baseMoodEffect>
     </li></stages>
   </ThoughtDef>
+  <ThoughtDef>
+    <defName>SD_Executed</defName>
+    <durationDays>3</durationDays>
+    <stackLimit>3</stackLimit>
+    <stages><li>
+      <label>prisoner executed</label>
+      <description>The farm executed a captive. I do not like where this is going.</description>
+      <baseMoodEffect>-6</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Recruited</defName>
+    <durationDays>2</durationDays>
+    <stackLimit>3</stackLimit>
+    <stages><li>
+      <label>new colonist</label>
+      <description>Another pair of hands joined us.</description>
+      <baseMoodEffect>3</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
 </Defs>
