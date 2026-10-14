@@ -50,6 +50,10 @@ public partial class ModEntry
         public bool Inside;     // currently in their bunkhouse (Pos is then in the bunkhouse's own coordinates)
         public bool Hidden;     // asleep in bed: not drawn
         public bool AtUse;
+        public Item? Meal;          // food taken from a chest, to be eaten at a table
+        public readonly Dictionary<StardewValley.Monsters.Monster, int> Ignored = new();   // monsters this hand gave up on (no shot for 5 s), until tick
+        public int NoShotTicks;
+        public bool MealPaste, MealFrozen, Dining;
         public StardewValley.Objects.Furniture? UseTarget;
         public Vector2 UseSpot;
         public int UseDir, UseUntil, NextIdlePick;
@@ -405,6 +409,13 @@ public partial class ModEntry
         if (!clear && a.StuckTicks == 90) { LogStuck(a, monsterTile, dist); RescueHand(a); }
         if (!clear && a.StuckTicks > 150 && dist <= 520 && HasLineOfSight(ToTile(a.Pos), monsterTile)) clear = true;
 
+        a.NoShotTicks = clear ? 0 : a.NoShotTicks + 1;
+        if (a.NoShotTicks > 300)
+        {
+            a.Ignored[target] = (int)Game1.ticks + 1800;   // gave it five seconds: it is not reachable; look again in 30 s or when it comes close
+            a.NoShotTicks = 0;
+        }
+
         if (clear && Game1.ticks >= a.NextShot)
         {
             a.NextShot = (int)Game1.ticks + gun.Cooldown * 2 + Game1.random.Next(0, 12);
@@ -489,7 +500,7 @@ public partial class ModEntry
         if (Game1.ticks % 300 == 0) { walkCache.Clear(); RefreshHomes(); }
         UpdateMonsterVelocities();
         TickMaintenance();
-        var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
+        var allMonsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)
         {
             // Each hand has a gun matched to their RimWorld Shooting skill, but it is only drawn while they are defending.
@@ -497,6 +508,11 @@ public partial class ModEntry
             a.Weapon = GunForSkill((int?)skillInfo?["shooting"] ?? 3);
             a.Armed = false;   // guns only come out while defending (Fight() sets this)
             a.Aim = a.Dir switch { 0 => 1.25f, 1 => 0.35f, 2 => -1.25f, _ => MathHelper.Pi - 0.35f };
+
+            // Give up on monsters that cannot be shot (beyond a fence, across water) until they come close; otherwise hands stand and stare.
+            foreach (var gone in a.Ignored.Keys.Where(k => k.Health <= 0 || Game1.ticks >= a.Ignored[k]).ToList()) a.Ignored.Remove(gone);
+            var monsters = allMonsters.Where(m => !a.Ignored.ContainsKey(m) || Vector2.Distance(m.Position, a.Pos) < 320).ToList();
+            if (monsters.Count == 0) a.NoShotTicks = 0;
 
             bool busy = a.Current != null || a.Jobs.Count > 0;
             bool fighting = monsters.Count > 0 && HandCanFight(a) && HandCanEngage(a, monsters);
@@ -517,13 +533,14 @@ public partial class ModEntry
                 a.Pos = target;
                 arrived = true;
             }
-            if (!arrived && a.Current != null)
+            if (!arrived)
             {
                 // Watchdog: two hands crowding the same spot can lock each other in place. If this hand has not moved for ~2 seconds
                 // and is already close to its spot, put it on the spot (a walkable tile) so the job can proceed.
                 a.StuckTicks = Vector2.DistanceSquared(a.Pos, a.LastPos) < 0.25f ? a.StuckTicks + 1 : 0;
                 a.LastPos = a.Pos;
-                if (a.StuckTicks > 120 && Vector2.Distance(a.Pos, target) < 192f) { a.Pos = target; a.StuckTicks = 0; a.PathGoal = new Point(-99999, -99999); arrived = true; }
+                if (a.Current != null && a.StuckTicks > 120 && Vector2.Distance(a.Pos, target) < 192f) { a.Pos = target; a.StuckTicks = 0; a.PathGoal = new Point(-99999, -99999); arrived = true; }
+                else if (a.StuckTicks == 150) { LogStuck(a, ToTile(target), Vector2.Distance(a.Pos, target)); RescueHand(a); }   // walking nowhere: free it
             }
             if (!arrived)
             {

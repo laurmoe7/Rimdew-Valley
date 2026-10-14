@@ -104,6 +104,20 @@ public partial class ModEntry
         lastHealth = Game1.player.health;
     }
 
+    /// <summary>Cheat: clear every injury in RimWorld, and restore health and energy here.</summary>
+    internal void HealAllWounds()
+    {
+        if (!Context.IsWorldReady) return;
+        Send(new JObject { ["type"] = "heal_all" });
+        var p = Game1.player;
+        p.health = p.maxHealth;
+        p.Stamina = p.MaxStamina;
+        p.buffs.Remove(InjuryBuffId);
+        ignoreHealthUntil = (int)Game1.ticks + 60;
+        lastHealth = p.health;
+        Hud("All wounds healed.", HUDMessage.achievement_type);
+    }
+
     /// <summary>Use medicine: Muscle Remedy tends well, Fiber works as a rough bandage.</summary>
     private void TendCommand()
     {

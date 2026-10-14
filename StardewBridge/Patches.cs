@@ -69,3 +69,42 @@ internal static class FreezerDrawPatch
         return false;
     }
 }
+
+/// <summary>A microwave standing on a table. The game would draw its tall sprite from the table top and let it hang over the edge,
+/// so hide it from the normal pass and draw only the sprite's lower 16x16 (the microwave itself) where a small item would sit.</summary>
+[HarmonyPatch(typeof(StardewValley.Objects.Furniture), nameof(StardewValley.Objects.Furniture.draw),
+    new[] { typeof(Microsoft.Xna.Framework.Graphics.SpriteBatch), typeof(int), typeof(int), typeof(float) })]
+internal static class TableMicrowaveDrawPatch
+{
+    private static void Prefix(StardewValley.Objects.Furniture __instance, out StardewValley.Object? __state)
+    {
+        __state = null;
+        if (__instance.heldObject.Value is { } h && ModEntry.IsMicrowaveObj(h))
+        {
+            __state = h;
+            __instance.heldObject.Value = null;
+        }
+    }
+
+    // a finalizer, so the microwave always goes back even if the table's own drawing throws
+    private static Exception? Finalizer(StardewValley.Objects.Furniture __instance, Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch, float alpha,
+        StardewValley.Object? __state, Exception? __exception)
+    {
+        if (__state == null) return __exception;
+        __instance.heldObject.Value = __state;
+        if (__exception != null) return __exception;
+        var data = ItemRegistry.GetDataOrErrorItem(__state.QualifiedItemId);
+        var src = data.GetSourceRect();
+        src = new Microsoft.Xna.Framework.Rectangle(src.X, src.Y + 14, src.Width, 16);   // rows 14-29: the 14-row microwave plus its outline
+        var box = __instance.boundingBox.Value;
+        float low = __instance.drawHeldObjectLow.Value ? 32 : 85;
+        var pos = Game1.GlobalToLocal(Game1.viewport, new Microsoft.Xna.Framework.Vector2(box.Center.X - 32, box.Center.Y - low));
+        float depth = box.Bottom / 10000f;
+        spriteBatch.Draw(Game1.shadowTexture, pos + new Microsoft.Xna.Framework.Vector2(32f, 53f), Game1.shadowTexture.Bounds, Microsoft.Xna.Framework.Color.White * alpha, 0f,
+            new Microsoft.Xna.Framework.Vector2(Game1.shadowTexture.Bounds.Center.X, Game1.shadowTexture.Bounds.Center.Y), 4f,
+            Microsoft.Xna.Framework.Graphics.SpriteEffects.None, depth);
+        spriteBatch.Draw(data.GetTexture(), pos, src, Microsoft.Xna.Framework.Color.White * alpha, 0f, Microsoft.Xna.Framework.Vector2.Zero, 4f,
+            Microsoft.Xna.Framework.Graphics.SpriteEffects.None, depth + 1E-05f);
+        return null;
+    }
+}

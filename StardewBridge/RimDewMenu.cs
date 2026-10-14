@@ -313,9 +313,15 @@ public partial class RimDewMenu : IClickableMenu
             Text(b, "No research data yet. Sleep a night with RimWorld running.", c.X, c.Y + 10);
             return;
         }
+        // rows of 58 px; one row at the bottom is kept for the hint line
+        var projects = mod.lastProjects;
+        int rows = Math.Max(1, c.Height / 58 - 1);
+        scroll = Math.Min(scroll, Math.Max(0, projects.Count - rows));
+        DrawScrollbar(b, new Rectangle(c.X + c.Width + 8, c.Y, 18, rows * 58), projects.Count, rows);
         int row = 0;
-        foreach (var p in mod.lastProjects)
+        for (int i = scroll; i < projects.Count && row < rows; i++)
         {
+            var p = projects[i];
             string id = (string)p["id"]!, label = (string)p["label"]!;
             double prog = (double)p["progress"]!, cost = (double)p["cost"]!;
             bool done = (bool)p["done"]!, target = mod.Data.ResearchTarget == id;
@@ -335,6 +341,7 @@ public partial class RimDewMenu : IClickableMenu
         var c = Content;
         var h = mod.LastHealth;
         Button(b, new Rectangle(c.X, ActionY, 460, 40), "Tend wounds (Muscle Remedy or Fiber)", mod.Tend);
+        Button(b, new Rectangle(c.X + 480, ActionY, 340, 40), $"Heal all wounds ({mod.Config.HealKey})", mod.HealAllWounds);
         if (h == null)
         {
             Text(b, "No health data yet. Get hurt, or sleep a night, with RimWorld running.", c.X, c.Y + 10);
@@ -398,7 +405,7 @@ public partial class RimDewMenu : IClickableMenu
                 ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit),
                 ("Place bunkhouse", mod.PlaceBunkhouse), ("Power kit", mod.GivePowerKit), ("Defense kit", mod.GiveDefenseKit) }),
             ("Player", new (string, Action)[] { ("Max tools", mod.MaxTools), ("36-slot backpack", mod.MaxBackpack), ("Max skills", mod.MaxSkills),
-                ("Full heal+energy", mod.FullRestore), ("+50,000g", () => mod.AddMoney(50000)), ("Max friendship", mod.MaxFriendship),
+                ("Full heal+energy", mod.FullRestore), ("Heal all wounds", mod.HealAllWounds), ("+50,000g", () => mod.AddMoney(50000)), ("Max friendship", mod.MaxFriendship),
                 ("Clear monsters", mod.ClearMonsters), ("Time: 6pm", () => mod.SetTime(1800)) }),
             ("Monsters", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),

@@ -49,7 +49,7 @@ public partial class ModEntry : Mod
         helper.Events.Display.MenuChanged += OnMenuChanged;
         helper.Events.Display.RenderedWorld += DrawHeldGun;
         helper.Events.Content.AssetRequested += OnAssetRequested;
-        helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
+        helper.Events.Input.ButtonsChanged += (_, _) => { if (Context.IsPlayerFree && Config.HealKey.JustPressed()) HealAllWounds(); if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
         helper.Events.GameLoop.GameLaunched += (_, _) => DevDump();
         try { new HarmonyLib.Harmony(ModManifest.UniqueID).PatchAll(typeof(ModEntry).Assembly); }

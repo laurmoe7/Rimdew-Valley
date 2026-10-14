@@ -51,8 +51,23 @@ public partial class ModEntry
         a.AtUse = false;
         a.UseTarget = null;
         ResetPath(a);
-        int slotIdx = Math.Max(0, data.Hands.IndexOf(a.Name)) % BunkCapacity;
-        a.Pos = (a.Door ?? a.Home) + new Vector2((slotIdx - 1.5f) * 26, 8);
+        // Step out onto the nearest open ground in front of the door that no other hand is standing on (the door row itself is
+        // building footprint, and two hands emerging together used to wedge into each other there).
+        var doorTile = ToTile(a.Door ?? a.Home);
+        var others = actors.Values.Where(o => o != a && !o.Inside).Select(o => o.Pos).ToList();
+        Vector2? spot = null;
+        for (int r = 1; r <= 5 && spot == null; r++)
+            for (int dy = 0; dy <= r && spot == null; dy++)
+                for (int dx = -r; dx <= r && spot == null; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), dy) != r) continue;
+                    var t = new Point(doorTile.X + dx, doorTile.Y + dy);
+                    if (!Walkable(t)) continue;
+                    var p = new Vector2(t.X * 64, t.Y * 64);
+                    if (others.Any(o => Vector2.Distance(o, p) < 60f)) continue;
+                    spot = p;
+                }
+        a.Pos = spot ?? (a.Door ?? a.Home) + new Vector2(0, 64);
         a.Dir = 0;
         a.Moving = false;
     }
@@ -138,7 +153,7 @@ public partial class ModEntry
         if (busy || fighting)
         {
             // Work or a raid: stop whatever they were doing and walk out through the door.
-            a.Hidden = false; a.AtUse = false; a.UseTarget = null;
+            a.Hidden = false; a.AtUse = false; a.UseTarget = null; a.Dining = false;
             var exit = ExitTileOf(loc);
             if (exit == null) { Emerge(a); return; }
             a.Activity = "heading out";
@@ -147,6 +162,8 @@ public partial class ModEntry
             if (arrived) Emerge(a);
             return;
         }
+
+        if (a.UseTarget == null && HasMeal(a)) { StartDining(a); if (a.UseTarget != null) return; }
 
         if (a.UseTarget == null)
         {
@@ -174,6 +191,7 @@ public partial class ModEntry
                 a.UseUntil = (int)Game1.ticks + Game1.random.Next(600, 1500);
                 a.Dir = a.UseDir;
                 a.Activity = UseVerb(a.UseTarget);
+                if (a.Dining) { a.UseUntil = (int)Game1.ticks + MealTicks; a.Activity = "eating"; }
                 a.Hidden = a.UseTarget is BedFurniture;   // asleep in bed: not drawn, shows Zzz instead
             }
             return;
@@ -182,6 +200,7 @@ public partial class ModEntry
         a.Moving = false;
         if (Game1.ticks >= a.UseUntil)
         {
+            if (a.Dining) FinishMeal(a);
             a.AtUse = false; a.UseTarget = null; a.Hidden = false;
             a.NextIdlePick = (int)Game1.ticks + Game1.random.Next(240, 900);
         }

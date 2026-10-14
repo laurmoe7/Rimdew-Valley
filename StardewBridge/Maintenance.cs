@@ -59,7 +59,7 @@ public partial class ModEntry
             if (a.Current is { } c && IsMaintJob(c)) reserved.Add(c.Tile);
             foreach (var j in a.Jobs.Where(IsMaintJob)) reserved.Add(j.Tile);
         }
-        var idle = actors.Values.Where(a => a.Current == null && a.Jobs.Count == 0 && HandCanFight(a)).ToList();
+        var idle = actors.Values.Where(a => a.Current == null && a.Jobs.Count == 0 && HandCanFight(a) && !HasMeal(a)).ToList();
         if (idle.Count == 0) return;
 
         // 1. hungry hands eat first (day or night)

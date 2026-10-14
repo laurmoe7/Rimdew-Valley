@@ -101,6 +101,7 @@ public partial class ModEntry
             if (!pNodes.TryGetValue(j.Tile, out var dn) || !dn.Online || GetD(dn.Obj, PasteKey) < 1) return;
             var disp = dn.Obj;
             SetD(disp, PasteKey, GetD(disp, PasteKey) - 1);
+            if (actors.TryGetValue(j.Owner, out var pa) && FindDiningSeat(pa) != null) { pa.MealPaste = true; Defenses.Add($"{j.Owner} takes paste to the table"); return; }
             data.Hunger[j.Owner] = Math.Max(0, HungerOf(j.Owner) - 45);
             SendNpcEvent(j.Owner, "ate_paste");
             Defenses.Add($"{j.Owner} ate nutrient paste");
@@ -113,6 +114,7 @@ public partial class ModEntry
         var eaten = item.getOne();
         item.Stack--;
         if (item.Stack <= 0) chest.Items.Remove(item);
+        if (actors.TryGetValue(j.Owner, out var ha) && FindDiningSeat(ha) != null) { ha.Meal = eaten; ha.MealFrozen = frozen; Defenses.Add($"{j.Owner} takes a meal to the table"); return; }
         ApplyMeal(j.Owner, eaten, frozen);
     }
 

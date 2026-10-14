@@ -53,6 +53,7 @@ public partial class ModEntry
     private const float FeedReach = 2f;
 
     private static string PId(string shortId) => PowerPrefix + shortId;
+    internal static bool IsMicrowaveObj(SObject o) => o.bigCraftable.Value && o.ItemId == PId("Microwave");
     private static bool IsPowerObject(SObject o) => o.bigCraftable.Value && o.ItemId.StartsWith(PowerPrefix);
     private static bool IsRimObject(SObject o) => o.ItemId.StartsWith(PowerPrefix);
 
@@ -62,6 +63,7 @@ public partial class ModEntry
         public Vector2 Tile;               // key in pNodes: the farm tile, or a unique virtual tile for appliances inside buildings
         public GameLocation? Loc;          // the building interior this appliance stands in (null = on the farm)
         public Vector2 RealTile;           // tile inside that interior
+        public StardewValley.Objects.Furniture? Table;   // the table this appliance stands on (microwaves), else null
         public Vector2 Anchor;             // farm tile at the building's door: where hands go to use an indoor appliance
         public Vector2 Pos => Loc == null ? Tile : Anchor;   // where the node "is" on the farm, for linking and walking
         public string Kind = "";
@@ -276,6 +278,16 @@ public partial class ModEntry
             if (!pNodes.TryGetValue(tile, out var n) || n.Obj != o) pNodes[tile] = n = new PNode { Obj = o, Tile = tile, Kind = KindOf(o) };
         }
 
+        // microwaves standing on tables (the table's own tile is the key; furniture never shares a tile with an object)
+        foreach (var f in farm.furniture)
+        {
+            if (f.heldObject.Value is not { } held || !IsPowerObject(held)) continue;
+            seen.Add(f.TileLocation);
+            if (!pNodes.TryGetValue(f.TileLocation, out var tn) || tn.Obj != held)
+                pNodes[f.TileLocation] = tn = new PNode { Obj = held, Tile = f.TileLocation, Kind = KindOf(held) };
+            tn.Table = f;
+        }
+
         // appliances inside buildings join the node list under a unique virtual tile
         var interiors = new List<(Building b, List<PNode> nodes)>();
         int bi = 0;
@@ -292,6 +304,17 @@ public partial class ModEntry
                 seen.Add(key);
                 if (!pNodes.TryGetValue(key, out var n) || n.Obj != o)
                     pNodes[key] = n = new PNode { Obj = o, Tile = key, Loc = indoors, RealTile = tile, Kind = KindOf(o) };
+                n.Anchor = new Vector2(bld.tileX.Value + bld.humanDoor.Value.X, bld.tileY.Value + bld.humanDoor.Value.Y + 1);
+                inside.Add(n);
+            }
+            foreach (var f in indoors.furniture)
+            {
+                if (f.heldObject.Value is not { } held || !IsPowerObject(held)) continue;
+                var key = new Vector2(100000 + bi * 200 + f.TileLocation.X, 100000 + f.TileLocation.Y);
+                seen.Add(key);
+                if (!pNodes.TryGetValue(key, out var n) || n.Obj != held)
+                    pNodes[key] = n = new PNode { Obj = held, Tile = key, Loc = indoors, RealTile = f.TileLocation, Kind = KindOf(held) };
+                n.Table = f;
                 n.Anchor = new Vector2(bld.tileX.Value + bld.humanDoor.Value.X, bld.tileY.Value + bld.humanDoor.Value.Y + 1);
                 inside.Add(n);
             }
@@ -482,7 +505,23 @@ public partial class ModEntry
         if (!Context.IsPlayerFree || !e.Button.IsActionButton()) return;
         var tile = e.Cursor.GrabTile;
         bool pickup = Helper.Input.IsDown(SButton.LeftShift) || Helper.Input.IsDown(SButton.RightShift);
+
+        // a microwave in hand goes on a free table
+        if (Game1.player.CurrentItem is SObject mwItem && IsMicrowaveObj(mwItem)
+            && Game1.currentLocation.GetFurnitureAt(tile) is { } table && table.IsTable() && table.heldObject.Value == null
+            && Vector2.Distance(Game1.player.Tile, tile) <= 4)
+        {
+            var mw = (SObject)mwItem.getOne();
+            mw.TileLocation = table.TileLocation;
+            table.heldObject.Value = mw;
+            Game1.player.reduceActiveItemByOne();
+            Game1.playSound("woodyStep");
+            Helper.Input.Suppress(e.Button);
+            return;
+        }
+
         if (!Game1.currentLocation.objects.TryGetValue(tile, out var o) || !IsRimObject(o) || (IsTrap(o) && !pickup)) return;
+        if (o is StardewValley.Objects.Chest && !pickup) return;   // freezers are chests: right-click opens them as usual
         if (Vector2.Distance(Game1.player.Tile, tile) > (pickup ? 10 : 4)) return;
         Helper.Input.Suppress(e.Button);
 
@@ -552,7 +591,9 @@ public partial class ModEntry
             foreach (var n in pNodes.Values)
             {
                 if (n.Loc != Game1.currentLocation) continue;
-                var lamp = Game1.GlobalToLocal(Game1.viewport, new Vector2(n.RealTile.X * 64 + 27, n.RealTile.Y * 64 - 78));
+                var lamp = Game1.GlobalToLocal(Game1.viewport, n.Table != null
+                    ? new Vector2(n.Table.boundingBox.Value.Center.X - 5, n.Table.boundingBox.Value.Center.Y - 100)
+                    : new Vector2(n.RealTile.X * 64 + 27, n.RealTile.Y * 64 - 78));
                 e.SpriteBatch.Draw(Game1.fadeToBlackRect, new Rectangle((int)lamp.X, (int)lamp.Y, 10, 10), n.Online ? new Color(90, 230, 110) : new Color(230, 70, 60));
             }
             return;
@@ -604,7 +645,9 @@ public partial class ModEntry
             bool ok = n.Kind switch { "Generator" => GetD(n.Obj, FuelKey) > 0, "Solar" => n.Supply > 1 || Daylight() > 0, "Turret" => n.Online && GetD(n.Obj, AmmoKey) >= 1, _ => n.Online };
             if (n.Kind == "Pole") ok = grids[n.Grid].Satisfaction >= 0.5;
             // lamp sits just above the sprite (sprites are 2 tiles tall, bottom-aligned to the tile)
-            var lamp = Game1.GlobalToLocal(Game1.viewport, new Vector2(n.Tile.X * 64 + 27, n.Tile.Y * 64 - (n.Kind == "Pole" ? 64 : n.Kind == "Turret" ? 52 : 78)));
+            var lamp = Game1.GlobalToLocal(Game1.viewport, n.Table != null
+                ? new Vector2(n.Table.boundingBox.Value.Center.X - 5, n.Table.boundingBox.Value.Center.Y - 100)
+                : new Vector2(n.Tile.X * 64 + 27, n.Tile.Y * 64 - (n.Kind == "Pole" ? 64 : n.Kind == "Turret" ? 52 : 78)));
             b.Draw(Game1.fadeToBlackRect, new Rectangle((int)lamp.X, (int)lamp.Y, 10, 10), ok ? new Color(90, 230, 110) : new Color(230, 70, 60));
         }
     }

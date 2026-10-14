@@ -97,6 +97,7 @@ namespace RimDewBridge
                     break;
                 case "npc_event": NpcEvent(m.Str("npc"), m.Str("kind")); break;
                 case "player_hurt": Hurt(m.Num("amount"), m.Str("kind")); break;
+                case "heal_all": HealAll(); break;
                 case "tend": Tend((float)m.Num("quality", 0.4)); break;
                 case "hire": Ensure("hand:" + m.Str("name"), m.Str("name")); SendHandsInfo(); break;
                 case "fire": Fire(m.Str("name")); break;
@@ -219,6 +220,16 @@ namespace RimDewBridge
             foreach (var h in p.health.hediffSet.hediffs.ToList())
                 if (h.TendableNow()) h.Tended(quality, quality, 0);
             SendHealth(false, true);
+        }
+
+        /// <summary>Cheat: remove every injury and missing part from the farmer.</summary>
+        private void HealAll()
+        {
+            var p = Get("farmer");
+            if (p == null || p.Dead) return;
+            foreach (var h in p.health.hediffSet.hediffs.ToList())
+                if (h is Hediff_Injury || h is Hediff_MissingPart) p.health.RemoveHediff(h);
+            SendHealth();
         }
 
         /// <summary>A night's rest heals wounds faster than the (shortened) sim day would: tended wounds heal twice as much.</summary>

@@ -47,8 +47,95 @@ public partial class ModEntry
         return string.Join(" | ", found);
     }
 
+    private bool dineDone;
+    private int dtStart = -1;
+
+    /// <summary>RIMDEW_DINETEST=1: hungry hands should carry food to a chair beside a table in their bunkhouse; a microwave on a table is a power node.</summary>
+    private void TickDineTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_DINETEST") != "1" || dineDone || !Context.IsWorldReady) return;
+        if (dtStart < 0) { dtStart = (int)e.Ticks; Rt("DINE world ready"); }
+        int t = (int)e.Ticks - dtStart - 90;
+        if (t == -80) Game1.warpFarmer("Farm", 76, 20, 2);
+        if (t < 0) return;
+        var farm = Game1.getFarm();
+        var door = farm.GetMainFarmHouseEntry();
+        if (t % 30 == 0) { farm.characters.RemoveWhere(c => c is Monster); pendingSpawns.Clear(); }   // keep raids out of this test
+        try
+        {
+            if (t == 30)
+            {
+                var hand = actors.Values.FirstOrDefault(a => a.Bunk?.GetIndoors() != null);
+                if (hand == null) { Rt("DINE FAIL: no hand with a bunkhouse"); dineDone = true; return; }
+                var loc = hand.Bunk!.GetIndoors();
+                int w = loc.map.Layers[0].LayerWidth, exitY = loc.warps.FirstOrDefault()?.Y ?? loc.map.Layers[0].LayerHeight - 1;
+                StardewValley.Objects.Furniture? Put(string kind, Func<int, int, bool> where)
+                {
+                    string? id = FurnitureIdFor(kind); if (id == null) return null;
+                    for (int y = 2; y <= exitY - 3; y++)
+                        for (int x = 1; x < w - 1; x++)
+                        {
+                            if (!where(x, y)) continue;
+                            var f = ItemRegistry.Create("(F)" + id, 1, allowNull: true) as StardewValley.Objects.Furniture;
+                            if (f == null || !f.canBePlacedHere(loc, new Vector2(x, y))) continue;
+                            if (f.placementAction(loc, x * 64, y * 64, Game1.player)) return loc.furniture.LastOrDefault();
+                        }
+                    return null;
+                }
+                var table = Put("table", (x, y) => true);
+                var chair = table == null ? null : Put("chair", (x, y) =>
+                {
+                    var bb = table.boundingBox.Value;
+                    int x0 = bb.X / 64, y0 = bb.Y / 64, x1 = (bb.Right - 1) / 64, y1 = (bb.Bottom - 1) / 64;
+                    return (x >= x0 && x <= x1 && (y == y0 - 1 || y == y1 + 1)) || (y >= y0 && y <= y1 && (x == x0 - 1 || x == x1 + 1));
+                });
+                var table2 = Put("table", (x, y) => table == null || !table.boundingBox.Value.Intersects(new Rectangle(x * 64 - 64, y * 64 - 64, 320, 192)));
+                Rt($"DINE placed table={table?.Name} chair={chair?.Name} seats={chair?.GetSeatPositions().Count} table2={table2?.Name} in {loc.NameOrUniqueName}");
+                if (table2 != null)
+                {
+                    var mw = ItemRegistry.Create("(BC)" + PId("Microwave")) as StardewValley.Object;
+                    table2.heldObject.Value = mw;
+                    RescanPower();
+                    Rt($"DINE microwave on table: node exists={pNodes.Values.Any(n => n.Kind == "Microwave" && n.Table == table2)} tableType={table2.furniture_type.Value} lowDraw={table2.drawHeldObjectLow.Value}");
+                    dineTable2 = table2; dineLoc = loc;
+                }
+                walkCache.Clear();
+                var chestTile = new Vector2(door.X + 4, door.Y + 4);
+                farm.objects.Remove(chestTile);
+                var chest = new StardewValley.Objects.Chest(true, chestTile);
+                chest.modData[TestKey] = "1";
+                chest.Items.Add(ItemRegistry.Create("(O)24", 20));
+                farm.objects[chestTile] = chest;
+                foreach (var n in data.Hands) data.Hunger[n] = 85;
+                Rt($"DINE chest at {chestTile}; hunger 85; hands={string.Join(",", data.Hands)}");
+            }
+            if (t >= 60 && t % 150 == 0 && t < 260)
+                Rt($"DINE t={t} " + string.Join(" | ", actors.Values.Select(a => $"{a.Name}[{(a.Inside ? "in" : "out")} {ToTile(a.Pos).X},{ToTile(a.Pos).Y} {a.Activity} meal={(a.Meal != null || a.MealPaste)} dining={a.Dining} hunger={HungerOf(a.Name):0}]")) +
+                       $" defenses=[{string.Join("; ", Defenses.Distinct().TakeLast(4))}]");
+            if (t == 40 && Environment.GetEnvironmentVariable("RIMDEW_NOTABLE") != "1")
+            {
+                var tbl = ItemRegistry.Create("(F)" + FurnitureIdFor("table")) as StardewValley.Objects.Furniture;
+                var tile = new Vector2(door.X + 8, door.Y - 2);
+                tbl!.TileLocation = tile;
+                tbl.updateDrawPosition();
+                farm.furniture.Add(tbl);
+                tbl.heldObject.Value = ItemRegistry.Create("(BC)" + PId("Microwave")) as StardewValley.Object;
+                RescanPower();
+                Rt($"DINE farm table microwave node={pNodes.Values.Any(n => n.Kind == "Microwave" && n.Table == tbl)} box={tbl.boundingBox.Value}");
+                Game1.player.Position = new Vector2((tile.X + 1) * 64, (tile.Y + 3) * 64); Game1.xLocationAfterWarp = 0;
+            }
+            
+            if (t == 600) { Rt("DINE done"); dineDone = true; }
+        }
+        catch (Exception ex) { Rt("DINE EXCEPTION: " + ex); dineDone = true; }
+    }
+
+    private StardewValley.Objects.Furniture? dineTable2;
+    private GameLocation? dineLoc;
+
     private void TickRaidTest(UpdateTickedEventArgs e)
     {
+        TickDineTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;
