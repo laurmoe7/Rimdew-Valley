@@ -83,7 +83,7 @@ public partial class ModEntry
                 break;
             case "human":
                 int humans = Math.Clamp(points / 120, 2, 8);
-                Hud($"{label}! {humans} raiders approach the farm. Down them and capture them. They arrive in 10 seconds.", HUDMessage.error_type);
+                Hud($"{label}! {humans} raiders arrive in 10 seconds, then march on your farmhouse. Down them and capture them.", HUDMessage.error_type);
                 pendingSpawns.Add((now + 600, humans, "human"));
                 break;
             case "manhunter":
@@ -120,7 +120,7 @@ public partial class ModEntry
         bool Ok(Vector2 t) => t.X > 1 && t.Y > 1 && t.X < w - 2 && t.Y < h - 2
                               && Vector2.Distance(t, player) >= minDist && farm.CanSpawnCharacterHere(t);
 
-        int groupSize = kind == "golem" ? count : pod ? Math.Clamp(count / 2, 1, 5) : Math.Clamp(count / 3, 1, 4), placed = 0;
+        int groupSize = kind == "golem" || kind == "human" ? count : pod ? Math.Clamp(count / 2, 1, 5) : Math.Clamp(count / 3, 1, 4), placed = 0;
         while (placed < count)
         {
             Vector2 center = Vector2.Zero;
@@ -149,7 +149,7 @@ public partial class ModEntry
                     "sapper" => new DustSpirit(pos),
                     "golem" => new RockGolem(pos),
                     "manhunter" => new Bat(pos),
-                    "human" => new HumanRaider(pos, HumanRaider.Looks[rng.Next(HumanRaider.Looks.Length)], HumanRaider.Names[rng.Next(HumanRaider.Names.Length)], rng.NextDouble() < 0.5),
+                    "human" => MakeRaiderBody() is { } rb ? new HumanRaider(pos, HumanRaider.Names[rng.Next(HumanRaider.Names.Length)], rng.NextDouble() < 0.5, rb.body, rb.look) : new Grub(pos),
                     _ => new Grub(pos)
                 };
                 if (kind == "sapper") m.modData[SapperKey] = "1";

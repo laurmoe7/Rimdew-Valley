@@ -26,7 +26,7 @@ public partial class ModEntry
     private int ChestStock(string key) => CountFood(Matcher(key));
 
     private Chest? NearestChestWith(string key, Vector2 tile) =>
-        FarmChests().Where(c => c.Items.Any(Matcher(key))).OrderBy(c => Vector2.DistanceSquared(c.TileLocation, tile)).FirstOrDefault();
+        FarmChests().Where(c => c.Items.Any(Matcher(key))).OrderBy(ChestPriority).ThenBy(c => Vector2.DistanceSquared(c.TileLocation, tile)).FirstOrDefault();
 
     /// <summary>Take up to <paramref name="want"/> matching items out of the chest. Returns what came out (stacks are split).</summary>
     private static List<Item> TakeFromChest(Chest chest, Func<Item?, bool> pred, int want)
@@ -59,7 +59,7 @@ public partial class ModEntry
             if (a.Current is { } c && IsMaintJob(c)) reserved.Add(c.Tile);
             foreach (var j in a.Jobs.Where(IsMaintJob)) reserved.Add(j.Tile);
         }
-        var idle = actors.Values.Where(a => a.Current == null && a.Jobs.Count == 0 && HandCanFight(a) && !HasMeal(a)).ToList();
+        var idle = actors.Values.Where(a => a.Current == null && a.Jobs.Count == 0 && HandCanFight(a) && !HasMeal(a) && !a.Drafted).ToList();
         if (idle.Count == 0) return;
 
         // 1. hungry hands eat first (day or night)
@@ -214,7 +214,7 @@ public partial class ModEntry
                 break;
             case "cook" when IsPowerObject(o) && pNodes.TryGetValue(j.Tile, out var stove) && stove.Online:
                 var meal = ItemRegistry.Create("(O)" + PId("SimpleMeal"), 1);
-                var chest = j.Via.HasValue && farm.objects.TryGetValue(j.Via.Value, out var co) && co is Chest cc ? cc : FarmChests().FirstOrDefault();
+                var chest = DepositChest(meal, j.Tile) ?? (j.Via.HasValue && farm.objects.TryGetValue(j.Via.Value, out var co) && co is Chest cc ? cc : FarmChests().FirstOrDefault());
                 if (chest != null && chest.addItem(meal) == null) { j.Held.Clear(); if (farmNow) Game1.playSound("dirtyHit"); Defenses.Add($"{j.Owner} cooked a meal"); }
                 break;
             default:

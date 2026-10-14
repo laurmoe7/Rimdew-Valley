@@ -299,6 +299,7 @@ public partial class RimDewMenu : IClickableMenu
             string nm = name;
             Button(b, new Rectangle(c.X + c.Width - 208, ry + 34, 94, 38), "Mood", () => moodPopup = nm);
             Button(b, new Rectangle(c.X + c.Width - 110, ry + 34, 100, 38), "Fire", () => mod.FireHand(nm));
+            Button(b, new Rectangle(c.X + c.Width - 240, ry + 34, 120, 38), mod.IsDrafted(nm) ? "Undraft" : "Draft", () => mod.ToggleDraft(nm), active: mod.IsDrafted(nm));
         }
     }
 
@@ -431,7 +432,7 @@ public partial class RimDewMenu : IClickableMenu
             ("Monsters", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
                 ("Sappers x4", () => mod.SpawnMonsters(4, "sapper")), ("Drop pod x4", () => mod.SpawnMonsters(4, "podbrute")),
-                ("Raiders x4", () => mod.SpawnMonsters(4, "human")), ("Mech cluster x3", () => mod.SpawnMonsters(3, "golem")), ("Manhunters x4", () => mod.SpawnMonsters(4, "manhunter")),
+                ("Human raid", () => mod.StartRaid("human", "Raiders", 700)), ("Raiders x4", () => mod.SpawnMonsters(4, "human")), ("Mech cluster x3", () => mod.SpawnMonsters(3, "golem")), ("Manhunters x4", () => mod.SpawnMonsters(4, "manhunter")),
                 ("Weapons kit", mod.GiveWeaponsKit) }),
             ("RimWorld guns", new (string, Action)[] { ("All guns", mod.GiveAllGuns),
                 ("Revolver", () => mod.GiveGunById("Revolver")), ("Assault rifle", () => mod.GiveGunById("AssaultRifle")),

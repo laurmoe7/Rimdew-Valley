@@ -92,7 +92,7 @@ public partial class ModEntry
     private (Chest chest, Item item)? FindBestFood(Vector2 from)
     {
         bool canHeat = MicrowaveReady();
-        (Chest, Item)? best = null; int bestScore = 0; float bestDist = float.MaxValue;
+        (Chest, Item)? best = null; int bestScore = 0; float bestDist = float.MaxValue; int bestPrio = int.MaxValue;
         foreach (var c in FarmChests())
         {
             bool cold = IsFreezer(c);
@@ -104,7 +104,8 @@ public partial class ModEntry
                 bool bad = cold && !MeantFrozen(it) && !canHeat;
                 int score = FoodRank(g) * 2 + (bad ? 0 : 1);
                 float d = Vector2.DistanceSquared(c.TileLocation, from);
-                if (score > bestScore || (score == bestScore && d < bestDist)) { best = (c, it); bestScore = score; bestDist = d; }
+                int prio = ChestPriority(c);
+                if (score > bestScore || (score == bestScore && (prio < bestPrio || (prio == bestPrio && d < bestDist)))) { best = (c, it); bestScore = score; bestDist = d; bestPrio = prio; }
             }
         }
         return best;

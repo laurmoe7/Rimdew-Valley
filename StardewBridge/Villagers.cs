@@ -94,6 +94,8 @@ public partial class ModEntry
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
     {
         if (!Context.IsWorldReady) return;
+        if (TryChestPriorityClick(e)) return;
+        if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && TryGiveOrder(e)) return;
         SuppressSwing(e);
         if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && (Game1.currentLocation is Farm || InBunkInterior())
             && HandAt(e.Cursor.AbsolutePixels) != null)

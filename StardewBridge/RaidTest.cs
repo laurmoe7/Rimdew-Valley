@@ -48,6 +48,115 @@ public partial class ModEntry
         return string.Join(" | ", found);
     }
 
+    private bool cxDone;
+    private int cxStart = -1;
+
+    /// <summary>RIMDEW_CHESTTEST=1: open a chest menu (to see where the Storage settings button lands), then the settings panel; check the filter.</summary>
+    private void TickChestSettingsTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_CHESTTEST") != "1" || cxDone || !Context.IsWorldReady) return;
+        if (cxStart < 0) cxStart = (int)e.Ticks;
+        int t = (int)e.Ticks - cxStart;
+        if (t == 20) Game1.warpFarmer("Farm", 76, 20, 2);
+        var farm = Game1.getFarm();
+        var door = farm.GetMainFarmHouseEntry();
+        try
+        {
+            if (t == 300)
+            {
+                Game1.exitActiveMenu();
+                var chest = new StardewValley.Objects.Chest(true, new Vector2(door.X + 5, door.Y + 6));
+                chest.modData[TestKey] = "1";
+                chest.Items.Add(ItemRegistry.Create("(O)24", 12)); chest.Items.Add(ItemRegistry.Create("(O)388", 40)); chest.Items.Add(ItemRegistry.Create("(O)340", 2));
+                farm.objects[chest.TileLocation] = chest;
+                Game1.player.Position = new Vector2(chest.TileLocation.X * 64, (chest.TileLocation.Y + 1) * 64);
+                chest.ShowMenu();
+                Rt($"CHEST menu open: {Game1.activeClickableMenu?.GetType().Name}");
+            }
+            if (t == 1500 && Game1.activeClickableMenu is StardewValley.Menus.ItemGrabMenu { context: StardewValley.Objects.Chest ch } igm)
+            {
+                // block meals and wood, expand Foods and Raw food, then open the panel
+                var blocked = new HashSet<string> { "meals", "wood", "fish" };
+                SaveBlocked(ch, blocked);
+                StorageTree[0].Open = true; StorageTree[0].Kids[1].Open = true;
+                ch.modData[PriorityKey] = "3";
+                if (storagePanel != null && !storagePanel.Open) storagePanel.Click(60, Game1.uiViewport.Height / 2);   // click the Storage tab
+                var meal = ItemRegistry.Create("(O)" + PId("SimpleMeal"), 1);
+                var other = new StardewValley.Objects.Chest(true, new Vector2(door.X + 9, door.Y + 6)); other.modData[TestKey] = "1"; farm.objects[other.TileLocation] = other;
+                var dep = DepositChest(meal, ch.TileLocation);
+                Rt($"CHEST panel open; blocked={string.Join(",", BlockedLeaves(ch))}; meal deposit goes to {(dep == ch ? "BLOCKED CHEST (wrong)" : dep == other ? "the chest that allows meals (right)" : "none")}; parsnip allowed={ChestAllows(ch, ItemRegistry.Create("(O)24"))} wood allowed={ChestAllows(ch, ItemRegistry.Create("(O)388"))} sword leaf={StorageLeaf(ItemRegistry.Create("(W)0"))} pick leaf={StorageLeaf(ItemRegistry.Create("(T)Pickaxe"))}");
+            }
+            if (t == 2700) { Rt("CHEST done"); cxDone = true; }
+        }
+        catch (Exception ex) { Rt("CHEST EXCEPTION: " + ex); cxDone = true; }
+    }
+
+    private bool drDone;
+    private int drStart = -1;
+
+    /// <summary>RIMDEW_DRAFTTEST=1: draft hands, order a move, check they hold position against slimes, focus fire; check chest priorities.</summary>
+    private void TickDraftTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_DRAFTTEST") != "1" || drDone || !Context.IsWorldReady) return;
+        if (drStart < 0) drStart = (int)e.Ticks;
+        int t = (int)e.Ticks - drStart;
+        if (t == 20) Game1.warpFarmer("Farm", 76, 20, 2);
+        var farm = Game1.getFarm();
+        var door = farm.GetMainFarmHouseEntry();
+        if (t < 900 && t % 30 == 0 && t > 60 && t < 400) { farm.characters.RemoveWhere(c => c is Monster); pendingSpawns.Clear(); }
+        try
+        {
+            if (t == 100) { ToggleDraftAll(); Rt($"DRAFT drafted={actors.Values.Count(a => a.Drafted)}/{actors.Count}"); }
+            if (t == 400)
+            {
+                Rt("DRAFT after 300 ticks: " + string.Join(" | ", actors.Values.Select(a => $"{a.Name}[{(a.Inside ? "in" : "out")} {ToTile(a.Pos)} {a.Activity} armed={a.Armed}]")));
+                var spot = new Point(door.X + 8, door.Y + 3);
+                int i = 0;
+                foreach (var a in actors.Values) { a.OrderTile = new Point(spot.X + i++ * 2, spot.Y); a.PathGoal = NoGoal; }
+                Rt($"DRAFT ordered move to {spot}");
+            }
+            if (t == 700)
+            {
+                Rt("DRAFT after move order: " + string.Join(" | ", actors.Values.Select(a => $"{a.Name}[{ToTile(a.Pos)} {a.Activity}]")));
+                var first = actors.Values.First();
+                var p = first.Pos / 64f;
+                SpawnMonsters(1, "slime");
+                var m = farm.characters.OfType<Monster>().First();
+                m.Position = (p + new Vector2(5, 0)) * 64f; m.Health = 400; m.MaxHealth = 400; m.speed = 0;
+                dragMon = m;
+                Rt($"DRAFT slime placed 5 tiles east at {ToTile(m.Position)}");
+            }
+            if (t == 900 && dragMon != null)
+            {
+                Rt($"DRAFT hold-position test: slime hp={dragMon.Health}/400 hands=[{string.Join(", ", actors.Values.Select(a => a.Name + "@" + ToTile(a.Pos) + ":" + a.Activity))}]");
+                foreach (var a in actors.Values) a.Focus = dragMon;
+            }
+            if (t == 1200 && dragMon != null) Rt($"DRAFT focus fire: slime hp={dragMon.Health} hands=[{string.Join(", ", actors.Values.Select(a => a.Name + "@" + ToTile(a.Pos) + ":" + a.Activity))}]");
+            if (t == 1300)
+            {
+                farm.characters.RemoveWhere(c => c is Monster);
+                ToggleDraftAll();
+                // chest priorities: two chests, both with parsnips
+                var low = new StardewValley.Objects.Chest(true, new Vector2(door.X + 2, door.Y + 8)); low.Items.Add(ItemRegistry.Create("(O)24", 5));
+                var high = new StardewValley.Objects.Chest(true, new Vector2(door.X + 12, door.Y + 8)); high.Items.Add(ItemRegistry.Create("(O)24", 5));
+                low.modData[TestKey] = "1"; high.modData[TestKey] = "1";
+                high.modData[PriorityKey] = "3"; low.modData[PriorityKey] = "0";
+                farm.objects[low.TileLocation] = low; farm.objects[high.TileLocation] = high;
+                var meal = ItemRegistry.Create("(O)" + PId("SimpleMeal"), 1);
+                var dep = DepositChest(meal, low.TileLocation);
+                var take = NearestChestWith("raw", high.TileLocation);
+                Rt($"PRIORITY deposit goes to {(dep == high ? "HIGH" : dep == low ? "LOW" : "other " + dep?.TileLocation)} (want HIGH); supplies taken from {(take == low ? "LOW" : take == high ? "HIGH" : "other")} (want LOW, although HIGH is nearer)");
+                Rt($"PRIORITY names: {string.Join(",", PriorityNames)}; high={PriorityNames[ChestPriority(high)]} low={PriorityNames[ChestPriority(low)]} default={PriorityNames[ChestPriority(new StardewValley.Objects.Chest(true, Vector2.Zero))]}");
+                Game1.player.Position = new Vector2(high.TileLocation.X * 64, (high.TileLocation.Y + 1) * 64);
+                high.ShowMenu();
+            }
+            if (t == 1360) { Rt($"DRAFT done; menu={Game1.activeClickableMenu?.GetType().Name}"); drDone = true; }
+        }
+        catch (Exception ex) { Rt("DRAFT EXCEPTION: " + ex); drDone = true; }
+    }
+
+    private Monster? dragMon;
+
     private bool frzDone;
     private int frzStart = -1;
 
@@ -199,12 +308,18 @@ public partial class ModEntry
                 Rt($"HUMAN spawned: {farm.characters.OfType<HumanRaider>().Count()} raiders: " +
                    string.Join(", ", farm.characters.OfType<HumanRaider>().Select(r => $"{r.RaiderName}/{r.Look}/hp{r.Health}/{(r.Ranged ? "gun" : "melee")}")));
             }
-            if (t >= 60 && t % 180 == 0 && t < 3000)
+            if (t == 150)
+            {
+                var first = farm.characters.OfType<HumanRaider>().FirstOrDefault();
+                // (the player stays where they are, far from the raiders, so the march is what gets measured)
+            }
+            if (t >= 60 && t % 180 == 0 && t < 3600)
             {
                 var hs = farm.characters.OfType<HumanRaider>().ToList();
-                Rt($"HUMAN t={t} alive={hs.Count(r => !r.Downed)} downed={hs.Count(r => r.Downed)} playerHp={Game1.player.health} calm={Calm()} hands=[{string.Join(", ", actors.Values.Select(a => a.Name + ":" + a.Activity))}]");
+                var doorPt = farm.GetMainFarmHouseEntry();
+                Rt($"HUMAN t={t} alive={hs.Count(r => !r.Downed)} downed={hs.Count(r => r.Downed)} avgDistToDoor={(hs.Count == 0 ? 0 : hs.Average(r => Vector2.Distance(r.Tile, new Vector2(doorPt.X, doorPt.Y)))):0.0} looks=[{string.Join("; ", hs.Select(r => r.RaiderName + ": " + r.Look))}] playerHp={Game1.player.health} calm={Calm()} hands=[{string.Join(", ", actors.Values.Select(a => a.Name + ":" + a.Activity))}]");
             }
-            if (t == 3000)
+            if (t == 3600)
             {
                 var hs = farm.characters.OfType<HumanRaider>().ToList();
                 var down = hs.FirstOrDefault(r => r.Downed);
@@ -310,6 +425,8 @@ public partial class ModEntry
         TickCabinTest(e);
         TickColonyTest(e);
         TickFreezerTest(e);
+        TickDraftTest(e);
+        TickChestSettingsTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;

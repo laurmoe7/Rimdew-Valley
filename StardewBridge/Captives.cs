@@ -36,7 +36,7 @@ public partial class ModEntry
     internal void CaptureRaider(GameLocation farm, HumanRaider raider)
     {
         farm.characters.Remove(raider);
-        data.Captives.Add(raider.RaiderName + "|" + raider.Look);
+        data.Captives.Add(raider.RaiderName + "|" + raider.Look.Replace("|", " "));
         Game1.playSound("coin");
         Hud($"Captured {raider.RaiderName}! ({data.Captives.Count} captive{(data.Captives.Count == 1 ? "" : "s")})", HUDMessage.achievement_type);
     }

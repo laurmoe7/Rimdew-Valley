@@ -48,13 +48,16 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
         helper.Events.World.BuildingListChanged += OnBuildingListChanged;
+        helper.Events.Display.RenderedActiveMenu += DrawChestPriority;
+        helper.Events.Input.MouseWheelScrolled += OnStorageWheel;
+        helper.Events.GameLoop.UpdateTicked += (_, _) => TickStoragePanel();
         helper.Events.GameLoop.UpdateTicked += (_, _) => TickFreeBuild();
         helper.Events.GameLoop.DayStarted += (_, _) => { AssignCabinLooks(); ConvertFreezers(); };
         helper.Events.GameLoop.SaveLoaded += (_, _) => { AssignCabinLooks(); ConvertFreezers(); };
         helper.Events.Display.MenuChanged += OnMenuChanged;
         helper.Events.Display.RenderedWorld += DrawHeldGun;
         helper.Events.Content.AssetRequested += OnAssetRequested;
-        helper.Events.Input.ButtonsChanged += (_, _) => { if (Context.IsPlayerFree && Config.HealKey.JustPressed()) HealAllWounds(); if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
+        helper.Events.Input.ButtonsChanged += (_, _) => { if (Context.IsPlayerFree && Config.HealKey.JustPressed()) HealAllWounds(); if (Context.IsPlayerFree && Config.DraftKey.JustPressed()) ToggleDraftAll(); if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
 
         helper.Events.GameLoop.GameLaunched += (_, _) => DevDump();
         try { new HarmonyLib.Harmony(ModManifest.UniqueID).PatchAll(typeof(ModEntry).Assembly); }

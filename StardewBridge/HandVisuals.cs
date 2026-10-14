@@ -54,6 +54,9 @@ public partial class ModEntry
         public readonly Dictionary<StardewValley.Monsters.Monster, int> Ignored = new();   // monsters this hand gave up on (no shot for 5 s), until tick
         public int NoShotTicks;
         public bool MealPaste, MealFrozen, Dining;
+        public bool Drafted;                          // drafted: no chores, stands ground, obeys orders
+        public Point? OrderTile;                      // where a drafted hand was told to go
+        public StardewValley.Monsters.Monster? Focus; // monster a drafted hand was told to focus fire on
         public StardewValley.Objects.Furniture? UseTarget;
         public Vector2 UseSpot;
         public int UseDir, UseUntil, NextIdlePick;
@@ -514,9 +517,10 @@ public partial class ModEntry
             var monsters = allMonsters.Where(m => !a.Ignored.ContainsKey(m) || Vector2.Distance(m.Position, a.Pos) < 320).ToList();
             if (monsters.Count == 0) a.NoShotTicks = 0;
 
-            bool busy = a.Current != null || a.Jobs.Count > 0;
+            bool busy = a.Current != null || a.Jobs.Count > 0 || a.Drafted;
             bool fighting = monsters.Count > 0 && HandCanFight(a) && HandCanEngage(a, monsters);
             if (a.Inside) { TickIndoor(a, busy, fighting); continue; }
+            if (a.Drafted) { TickDrafted(a, monsters); continue; }
             if (fighting && TryPickTargets(a, monsters, out var pool, out bool hold)) { Fight(a, pool, hold); continue; }
 
             if (a.Current == null && a.Jobs.Count > 0) { a.Current = a.Jobs.Dequeue(); a.WorkTimer = 0; }
