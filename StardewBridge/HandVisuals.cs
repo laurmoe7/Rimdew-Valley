@@ -40,7 +40,12 @@ public partial class ModEntry
         public bool Armed;
         public StardewValley.Buildings.Building? Bunk;   // the bunkhouse building they live in
         public Vector2? Door;   // bunkhouse door tile (px) if they have one
-        public bool Inside;
+        public bool Inside;     // currently in their bunkhouse (Pos is then in the bunkhouse's own coordinates)
+        public bool Hidden;     // asleep in bed: not drawn
+        public bool AtUse;
+        public StardewValley.Objects.Furniture? UseTarget;
+        public Vector2 UseSpot;
+        public int UseDir, UseUntil, NextIdlePick;
         public List<Vector2>? Path;
         public Point PathGoal = new(-99999, -99999);
         public int PathIdx;
@@ -49,6 +54,9 @@ public partial class ModEntry
         public int RepathTick;
         public Vector2 LastPos;
         public int StuckTicks;
+        public HashSet<Point>? Reach;
+        public Point ReachOrigin;
+        public int ReachTick;
         public int XpPlants, XpAnimals, XpShooting;   // earned since the last night report     // currently indoors: not drawn, not clickable
         public float Aim;
         public Gun? Weapon;
@@ -132,11 +140,12 @@ public partial class ModEntry
             a.Bunk = BunkFor(i);
             if (reset)
             {
-                a.Pos = a.Door ?? a.Home;
-                a.Inside = a.Door.HasValue;   // they spend the night indoors
                 a.Jobs.Clear();
                 a.Current = null;
                 a.Activity = "resting";
+                a.Inside = false;
+                a.Pos = a.Home;
+                if (a.Door.HasValue && a.Bunk?.GetIndoors() != null) EnterBunk(a);   // they spend the night indoors
             }
         }
     }
@@ -235,7 +244,7 @@ public partial class ModEntry
             string name = (string)f["name"]!;
             var existing = LastHands.FirstOrDefault(h => (string?)h["name"] == name) as JObject;
             if (existing == null) { var copy = (JObject)f.DeepClone(); copy["hours"] = 0.0; LastHands.Add(copy); }
-            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status" }) existing[key] = f[key];
+            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status", "thoughts", "needs" }) existing[key] = f[key];
         }
         foreach (var gone in LastHands.Where(h => !data.Hands.Contains((string)h["name"]!)).ToList()) gone.Remove();
     }
@@ -292,6 +301,17 @@ public partial class ModEntry
     }
 
     // ---------- per-tick behaviour ----------
+    /// <summary>Is there something this hand could actually shoot at? Indoor hands are judged from their door.</summary>
+    private bool HandCanEngage(HandActor a, List<StardewValley.Monsters.Monster> monsters)
+    {
+        if (!a.Inside) return TryPickTargets(a, monsters, out _, out _);
+        var saved = a.Pos;
+        a.Pos = a.Door ?? a.Home;
+        bool ok = TryPickTargets(a, monsters, out _, out _);
+        a.Pos = saved;
+        return ok;
+    }
+
     private bool HandCanFight(HandActor a)
     {
         var info = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
@@ -302,7 +322,7 @@ public partial class ModEntry
 
     /// <summary>Defend the farm: walk into range of the nearest monster and shoot with a gun matched to the hand's
     /// RimWorld Shooting skill.</summary>
-    private void Fight(HandActor a, List<StardewValley.Monsters.Monster> monsters)
+    private void Fight(HandActor a, List<StardewValley.Monsters.Monster> monsters, bool hold)
     {
         var info = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
         int skill = (int?)info?["shooting"] ?? 3;
@@ -321,7 +341,7 @@ public partial class ModEntry
         var monsterTile = ToTile(target.Position);
         int slot = Math.Abs(StableSeed(a.Name)) % 5;                          // 0..4: personal stand-off distance
         bool clear = dist <= 360 + slot * 55 && HasLineOfSight(ToTile(a.Pos), monsterTile);
-        if (clear) a.Moving = false;
+        if (clear || hold) a.Moving = false;
         else
         {
             // No clear shot: walk (around terrain) toward the monster until there is one.
@@ -402,14 +422,9 @@ public partial class ModEntry
             a.Aim = a.Dir switch { 0 => 1.25f, 1 => 0.35f, 2 => -1.25f, _ => MathHelper.Pi - 0.35f };
 
             bool busy = a.Current != null || a.Jobs.Count > 0;
-            bool fighting = monsters.Count > 0 && HandCanFight(a);
-            if (a.Inside)
-            {
-                if (!busy && !fighting) { a.Moving = false; a.Activity = "inside"; continue; }
-                a.Inside = false;                         // step out of the door
-                if (a.Door.HasValue) a.Pos = a.Door.Value + new Vector2(0, 8);
-            }
-            if (fighting) { Fight(a, monsters); continue; }
+            bool fighting = monsters.Count > 0 && HandCanFight(a) && HandCanEngage(a, monsters);
+            if (a.Inside) { TickIndoor(a, busy, fighting); continue; }
+            if (fighting && TryPickTargets(a, monsters, out var pool, out bool hold)) { Fight(a, pool, hold); continue; }
 
             if (a.Current == null && a.Jobs.Count > 0) { a.Current = a.Jobs.Dequeue(); a.WorkTimer = 0; }
 
@@ -435,7 +450,7 @@ public partial class ModEntry
                 a.Moving = false;
                 if (a.Current == null)
                 {
-                    if (a.Door.HasValue) { a.Inside = true; a.Activity = "inside"; }   // walked up to the door: go in
+                    if (a.Door.HasValue && a.Bunk?.GetIndoors() != null) EnterBunk(a);   // walked up to the door: go in
                     else a.Activity = "resting";
                     continue;
                 }
@@ -477,12 +492,23 @@ public partial class ModEntry
         if (list.Count > 0) Send(new JObject { ["type"] = "hand_xp", ["hands"] = list });
     }
 
-    /// <summary>True if every hand has a bunk (4 per finished bunkhouse).</summary>
-    private bool HandsHoused()
+    /// <summary>Hands who have a bed: each finished bunkhouse houses as many of its (up to 4) residents as it has bed slots
+    /// (single bed 1, double bed 2).</summary>
+    private List<string> HousedNames()
     {
-        int beds = Game1.getFarm().buildings.Count(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0) * BunkCapacity;
-        return data.Hands.Count <= beds;
+        var housed = new List<string>();
+        var bunks = Game1.getFarm().buildings.Where(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0).ToList();
+        for (int idx = 0; idx < bunks.Count; idx++)
+        {
+            var indoors = bunks[idx].GetIndoors();
+            if (indoors == null) continue;
+            int slots = indoors.furniture.OfType<StardewValley.Objects.BedFurniture>().Sum(bed => bed.bedType == StardewValley.Objects.BedFurniture.BedType.Double ? 2 : 1);
+            housed.AddRange(data.Hands.Skip(idx * BunkCapacity).Take(BunkCapacity).Take(slots));
+        }
+        return housed;
     }
+
+    private bool HandsHoused() => HousedNames().Count >= data.Hands.Count;
 
     private void Perform(HandJob j)
     {
@@ -547,47 +573,15 @@ public partial class ModEntry
     }
 
     // ---------- drawing and clicking ----------
-    /// <summary>Position (px) of an indoor hand inside the bunkhouse the player is standing in, or null if they don't live here.</summary>
-    private Vector2? InteriorPos(HandActor a)
-    {
-        var loc = Game1.currentLocation;
-        if (loc == null || a.Bunk == null || a.Bunk.GetIndoors() != loc || !a.Inside) return null;
-        int slot = Math.Max(0, data.Hands.IndexOf(a.Name)) % BunkCapacity;
-        var exit = loc.warps.FirstOrDefault();
-        int w = loc.map.Layers[0].LayerWidth, h = loc.map.Layers[0].LayerHeight;
-        int ex = exit?.X ?? w / 2, ey = exit?.Y ?? h - 2;
-        // 2x2 cluster a few tiles in from the entrance, clamped inside the room.
-        int tx = Math.Clamp(ex - 1 + (slot % 2) * 2, 1, w - 2);
-        int ty = Math.Clamp(ey - 3 - (slot / 2) * 2, 1, h - 2);
-        return new Vector2(tx * 64, ty * 64);
-    }
-
     private bool InBunkInterior() => Game1.currentLocation != null && actors.Values.Any(a => a.Bunk != null && a.Bunk.GetIndoors() == Game1.currentLocation);
 
-    /// <summary>Draw the hands who are indoors while the player is inside their bunkhouse.</summary>
-    private void DrawInteriorHands(SpriteBatch b)
+    /// <summary>Called from a Harmony postfix on GameLocation.draw, i.e. inside the world's depth-sorted sprite pass, so farmhands
+    /// are correctly hidden behind trees, buildings and other objects.</summary>
+    internal void DrawHandsInWorld(GameLocation loc, SpriteBatch b)
     {
-        foreach (var a in actors.Values)
-        {
-            var ip = InteriorPos(a);
-            if (ip == null) continue;
-            var savedPos = a.Pos; var savedDir = a.Dir; var savedMoving = a.Moving; var savedArmed = a.Armed;
-            a.Pos = ip.Value; a.Dir = 0; a.Moving = false; a.Armed = false;
-            if (a.Body != null) DrawBody(b, a, 0f);
-            a.Pos = savedPos; a.Dir = savedDir; a.Moving = savedMoving; a.Armed = savedArmed;
-
-            var local = Game1.GlobalToLocal(Game1.viewport, ip.Value);
-            string label = $"{a.Name} (resting)";
-            var size = Game1.smallFont.MeasureString(label);
-            Utility.drawTextWithShadow(b, label, Game1.smallFont, new Vector2(local.X + 32 - size.X / 2, local.Y - 100), Color.White, 1f, 0.99f);
-        }
-    }
-
-    private void OnRenderedWorld(object? sender, RenderedWorldEventArgs e)
-    {
-        if (Context.IsWorldReady && InBunkInterior()) { DrawInteriorHands(e.SpriteBatch); return; }
-        if (!Context.IsWorldReady || Game1.currentLocation is not Farm) return;
-        var b = e.SpriteBatch;
+        if (!Context.IsWorldReady || loc != Game1.currentLocation) return;
+        if (InBunkInterior()) { DrawInteriorHands(b); return; }
+        if (loc is not Farm) return;
         foreach (var a in actors.Values)
         {
             if (a.Inside) continue;
@@ -644,9 +638,9 @@ public partial class ModEntry
     private HandActor? HandAt(Vector2 absolutePixels)
     {
         foreach (var a in actors.Values)
-            if (InteriorPos(a) is { } ip && new Rectangle((int)ip.X, (int)ip.Y - 64, 64, 128).Contains(absolutePixels)) return a;
+            if (a.Inside && !a.Hidden && a.Bunk?.GetIndoors() == Game1.currentLocation && new Rectangle((int)a.Pos.X, (int)a.Pos.Y - 64, 64, 128).Contains(absolutePixels)) return a;
         foreach (var a in actors.Values)
-            if (!a.Inside && new Rectangle((int)a.Pos.X, (int)a.Pos.Y - 64, 64, 128).Contains(absolutePixels)) return a;
+            if (!a.Inside && Game1.currentLocation is Farm && new Rectangle((int)a.Pos.X, (int)a.Pos.Y - 64, 64, 128).Contains(absolutePixels)) return a;
         return null;
     }
 }

@@ -8,26 +8,30 @@ namespace StardewBridge;
 /// line-of-sight test so they only shoot targets their bullets can reach.</summary>
 public partial class ModEntry
 {
-    private readonly Dictionary<Point, bool> walkCache = new();
+    private readonly Dictionary<(string, int, int), bool> walkCache = new();
     private static readonly Point NoGoal = new(-99999, -99999);
 
     private static Point ToTile(Vector2 topLeftPx) =>
         new((int)Math.Floor((topLeftPx.X + 32) / 64), (int)Math.Floor((topLeftPx.Y + 32) / 64));
 
-    private bool Walkable(Point t)
+    /// <summary>Where a hand currently is: the farm, or the inside of their bunkhouse.</summary>
+    private GameLocation LocOf(HandActor a) => a.Inside && a.Bunk?.GetIndoors() is { } inside ? inside : Game1.getFarm();
+
+    private bool Walkable(Point t, GameLocation? loc = null)
     {
-        if (walkCache.TryGetValue(t, out var cached)) return cached;
-        var farm = Game1.getFarm();
-        bool ok = t.X >= 0 && t.Y >= 0 && t.X < farm.map.Layers[0].LayerWidth && t.Y < farm.map.Layers[0].LayerHeight
-                  && farm.isTilePassable(new xTile.Dimensions.Location(t.X, t.Y), Game1.viewport)
+        loc ??= Game1.getFarm();
+        var key = (loc.NameOrUniqueName, t.X, t.Y);
+        if (walkCache.TryGetValue(key, out var cached)) return cached;
+        bool ok = t.X >= 0 && t.Y >= 0 && t.X < loc.map.Layers[0].LayerWidth && t.Y < loc.map.Layers[0].LayerHeight
+                  && loc.isTilePassable(new xTile.Dimensions.Location(t.X, t.Y), Game1.viewport)
                   // Farmer-mode collision: the version that correctly reports open ground (the NPC-pathfinding mode reported every tile blocked).
-                  && !farm.isCollidingPosition(new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52), Game1.viewport, true, 0, false, Game1.player);
-        walkCache[t] = ok;
+                  && !loc.isCollidingPosition(new Rectangle(t.X * 64 + 6, t.Y * 64 + 6, 52, 52), Game1.viewport, true, 0, false, Game1.player);
+        walkCache[key] = ok;
         return ok;
     }
 
     /// <summary>Tiles to walk through (world px, top-left), excluding the start tile. Empty = already there; null = no route.</summary>
-    private List<Vector2>? FindPath(Point start, Point goal, bool allowPartial, out bool partial)
+    private List<Vector2>? FindPath(Point start, Point goal, bool allowPartial, out bool partial, GameLocation? loc = null)
     {
         partial = false;
         if (start == goal) return new List<Vector2>();
@@ -60,7 +64,7 @@ public partial class ModEntry
             {
                 var n = new Point(cur.X + d.X, cur.Y + d.Y);
                 if (n.X < minX || n.X > maxX || n.Y < minY || n.Y > maxY) continue;
-                if (n != goal && !Walkable(n)) continue;          // the goal tile itself is always allowed (doors, crops' stand spots)
+                if (n != goal && !Walkable(n, loc)) continue;          // the goal tile itself is always allowed (doors, crops' stand spots)
                 int c = cost[cur] + 1;
                 if (cost.TryGetValue(n, out var old) && old <= c) continue;
                 cost[n] = c;
@@ -88,7 +92,7 @@ public partial class ModEntry
         var goalTile = ToTile(goalPx);
         if (goalTile != a.PathGoal && Game1.ticks >= a.RepathTick)
         {
-            a.Path = FindPath(ToTile(a.Pos), goalTile, allowPartial, out bool partial);
+            a.Path = FindPath(ToTile(a.Pos), goalTile, allowPartial, out bool partial, LocOf(a));
             a.PathPartial = partial;
             a.PathGoal = goalTile;
             a.PathIdx = 0;
@@ -116,7 +120,7 @@ public partial class ModEntry
     }
 
     /// <summary>Closest walkable tile to <paramref name="from"/> within <paramref name="radius"/>, searching outward in rings.</summary>
-    private Point? NearestWalkable(Point from, int radius)
+    private Point? NearestWalkable(Point from, int radius, GameLocation? loc = null)
     {
         for (int r = 0; r <= radius; r++)
             for (int dx = -r; dx <= r; dx++)
@@ -124,7 +128,7 @@ public partial class ModEntry
                 {
                     if (Math.Max(Math.Abs(dx), Math.Abs(dy)) != r) continue;
                     var p = new Point(from.X + dx, from.Y + dy);
-                    if (Walkable(p)) return p;
+                    if (Walkable(p, loc)) return p;
                 }
         return null;
     }
@@ -148,6 +152,51 @@ public partial class ModEntry
         Monitor.Log($"[stuck] {a.Name} at tile {t.X},{t.Y} ({W(t)}); neighbours N {W(new Point(t.X, t.Y - 1))}, E {W(new Point(t.X + 1, t.Y))}, " +
                     $"S {W(new Point(t.X, t.Y + 1))}, W {W(new Point(t.X - 1, t.Y))}; target tile {monsterTile.X},{monsterTile.Y}, dist {dist:0}; " +
                     $"path {(a.Path == null ? "none" : a.Path.Count.ToString())}{(a.PathPartial ? " (partial)" : "")}, unreachable {a.Unreachable}", LogLevel.Info);
+    }
+
+    /// <summary>Can this hand walk to the tile (or stand right next to it)? Flood fill over walkable farm tiles, cached ~0.75s.</summary>
+    private bool CanReach(HandActor a, Point tile)
+    {
+        var origin = ToTile(a.Pos);
+        if (a.Reach == null || a.ReachOrigin != origin || Game1.ticks - a.ReachTick > 45)
+        {
+            var seen = new HashSet<Point> { origin };
+            var queue = new Queue<Point>();
+            queue.Enqueue(origin);
+            var dirs = new[] { new Point(1, 0), new Point(-1, 0), new Point(0, 1), new Point(0, -1) };
+            int visited = 0;
+            while (queue.Count > 0 && visited++ < 7000)
+            {
+                var c = queue.Dequeue();
+                foreach (var d in dirs)
+                {
+                    var n = new Point(c.X + d.X, c.Y + d.Y);
+                    if (seen.Contains(n) || !Walkable(n)) continue;
+                    seen.Add(n);
+                    queue.Enqueue(n);
+                }
+            }
+            a.Reach = seen;
+            a.ReachOrigin = origin;
+            a.ReachTick = (int)Game1.ticks;
+        }
+        if (a.Reach.Contains(tile)) return true;
+        return a.Reach.Contains(new Point(tile.X + 1, tile.Y)) || a.Reach.Contains(new Point(tile.X - 1, tile.Y))
+            || a.Reach.Contains(new Point(tile.X, tile.Y + 1)) || a.Reach.Contains(new Point(tile.X, tile.Y - 1));
+    }
+
+    /// <summary>Pick what a hand should shoot at: monsters they can walk to; if none, only those already in range with a clear line
+    /// (they then hold position instead of hugging the nearest cliff edge).</summary>
+    private bool TryPickTargets(HandActor a, List<StardewValley.Monsters.Monster> monsters, out List<StardewValley.Monsters.Monster> pool, out bool hold)
+    {
+        hold = false;
+        pool = monsters.Where(m => CanReach(a, ToTile(m.Position))).ToList();
+        if (pool.Count > 0) return true;
+        var feet = a.Pos + new Vector2(32, 32);
+        var here = ToTile(a.Pos);
+        pool = monsters.Where(m => Vector2.Distance(m.Position + new Vector2(32, 32), feet) <= 520 && HasLineOfSight(here, ToTile(m.Position))).ToList();
+        hold = true;
+        return pool.Count > 0;
     }
 
     /// <summary>True if every tile between the two (exclusive) is open ground, i.e. a bullet would not hit terrain first.</summary>

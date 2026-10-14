@@ -134,6 +134,79 @@ public partial class ModEntry
         catch (Exception e) { Monitor.Log("Dev dump failed: " + e.Message, LogLevel.Warn); }
     }
 
+    // --- furniture ---
+    private string? FindFurnitureId(Func<string[], bool> match, int skip = 0)
+    {
+        var data = Game1.content.Load<Dictionary<string, string>>("Data/Furniture");
+        var found = new List<(string id, int price)>();
+        foreach (var (id, row) in data)
+        {
+            var p = row.Split('/');
+            if (p.Length < 6 || !match(p)) continue;
+            found.Add((id, int.TryParse(p[5], out var pr) ? pr : 0));
+        }
+        var ordered = found.OrderBy(x => x.price).ToList();
+        if (ordered.Count == 0) return null;
+        return ordered[Math.Min(skip, ordered.Count - 1)].id;
+    }
+
+    private static bool Type(string[] p, string type) => string.Equals(p[1], type, StringComparison.OrdinalIgnoreCase);
+
+    private string? FurnitureIdFor(string kind) => kind switch
+    {
+        "bed" => FindFurnitureId(p => Type(p, "bed") && !p[0].Contains("Double", StringComparison.OrdinalIgnoreCase) && !p[0].Contains("Child", StringComparison.OrdinalIgnoreCase))
+                 ?? FindFurnitureId(p => Type(p, "bed")),
+        "doublebed" => FindFurnitureId(p => Type(p, "bed") && p[0].Contains("Double", StringComparison.OrdinalIgnoreCase))
+                       ?? FindFurnitureId(p => Type(p, "bed"), 1),
+        "chair" => FindFurnitureId(p => Type(p, "chair")),
+        "table" => FindFurnitureId(p => Type(p, "table")),
+        "bookcase" => FindFurnitureId(p => Type(p, "bookcase")),
+        "lamp" => FindFurnitureId(p => Type(p, "lamp")),
+        "tv" => FindFurnitureId(p => p[0].Contains("TV", StringComparison.OrdinalIgnoreCase) || p[0].Contains("Television", StringComparison.OrdinalIgnoreCase)),
+        _ => null
+    };
+
+    internal void GiveFurniture(string kind)
+    {
+        string? id = FurnitureIdFor(kind);
+        var item = id == null ? null : ItemRegistry.Create("(F)" + id, 1, allowNull: true);
+        if (item == null) { Hud($"Couldn't find a '{kind}' in this version's furniture list.", HUDMessage.error_type); return; }
+        Game1.player.addItemByMenuIfNecessary(item);
+        Hud($"{item.DisplayName} added. Place it inside a bunkhouse (right click on the floor).", HUDMessage.achievement_type);
+    }
+
+    /// <summary>Stand inside a bunkhouse and click: places 2 beds, a chair, table, bookcase and lamp wherever they fit.</summary>
+    internal void FurnishBunkhouse()
+    {
+        var loc = Game1.currentLocation;
+        bool inBunk = loc != null && Game1.getFarm().buildings.Any(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.GetIndoors() == loc);
+        if (!inBunk) { Hud("Walk into a bunkhouse first, then press this.", HUDMessage.error_type); return; }
+
+        int exitY = loc!.warps.FirstOrDefault()?.Y ?? loc.map.Layers[0].LayerHeight - 1;
+        int w = loc.map.Layers[0].LayerWidth;
+        int placed = 0;
+        foreach (var kind in new[] { "bed", "bed", "chair", "table", "bookcase", "lamp" })
+        {
+            string? id = FurnitureIdFor(kind);
+            if (id == null) continue;
+            for (int y = 2; y <= exitY - 3 && placed >= 0; y++)
+            {
+                bool done = false;
+                for (int x = 1; x < w - 1 && !done; x++)
+                {
+                    var f = ItemRegistry.Create("(F)" + id, 1, allowNull: true) as StardewValley.Objects.Furniture;
+                    if (f == null) break;
+                    var tile = new Vector2(x, y);
+                    if (!f.canBePlacedHere(loc, tile)) continue;
+                    if (f.placementAction(loc, x * 64, y * 64, Game1.player)) { placed++; done = true; }
+                }
+                if (done) break;
+            }
+        }
+        walkCache.Clear();
+        Hud($"Furnished the bunkhouse with {placed} pieces.", HUDMessage.achievement_type);
+    }
+
     internal void GrowAllCrops()
     {
         int n = 0;

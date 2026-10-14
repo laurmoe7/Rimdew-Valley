@@ -31,8 +31,11 @@ public partial class ModEntry : Mod
     internal HubClient Hub => hub;
     internal SaveData Data => data;
 
+    internal static ModEntry? Instance;
+
     public override void Entry(IModHelper helper)
     {
+        Instance = this;
         Config = helper.ReadConfig<ModConfig>();
         hub = new HubClient("127.0.0.1", 7777, m => Monitor.Log(m, LogLevel.Info));
 
@@ -42,7 +45,6 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.DayEnding += (_, _) => OnDayEnding();
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
-        helper.Events.Display.RenderedWorld += OnRenderedWorld;
         helper.Events.Display.RenderedWorld += DrawHeldGun;
         helper.Events.Content.AssetRequested += OnAssetRequested;
         helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
@@ -54,6 +56,14 @@ public partial class ModEntry : Mod
     }
 
     private void Send(JObject msg) => hub.Send(msg);
+
+    private bool patchErrorLogged;
+    internal void LogPatchError(Exception e)
+    {
+        if (patchErrorLogged) return;
+        patchErrorLogged = true;
+        Monitor.Log($"Farmhand drawing failed: {e}", LogLevel.Error);
+    }
 
     private void OnSaveLoaded()
     {
@@ -118,6 +128,7 @@ public partial class ModEntry : Mod
             ["wealth"] = ComputeWealth(),
             ["wages_paid"] = paid,
             ["housed"] = HandsHoused(),
+            ["housed_names"] = new JArray(HousedNames()),
             ["research_points"] = gained / 25,
             ["backlog"] = BuildBacklog(farm)
         });

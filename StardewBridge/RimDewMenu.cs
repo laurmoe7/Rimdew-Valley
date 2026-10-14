@@ -17,6 +17,7 @@ public class RimDewMenu : IClickableMenu
     private readonly ModEntry mod;
     private readonly List<(Rectangle rect, Action click)> hits = new();
     private int tab;
+    private string? moodPopup;
     private int scroll;
 
     public RimDewMenu(ModEntry mod, int startTab = 0)
@@ -31,7 +32,7 @@ public class RimDewMenu : IClickableMenu
     private void Reposition()
     {
         width = Math.Min(1000, Game1.uiViewport.Width - 64);
-        height = Math.Min(880, Game1.uiViewport.Height - 40);
+        height = Math.Min(960, Game1.uiViewport.Height - 40);
         xPositionOnScreen = (Game1.uiViewport.Width - width) / 2;
         yPositionOnScreen = (Game1.uiViewport.Height - height) / 2;
         initializeUpperRightCloseButton();
@@ -123,8 +124,57 @@ public class RimDewMenu : IClickableMenu
             case 4: DrawTest(b); break;
         }
 
+        if (moodPopup != null) DrawMoodPopup(b);
+
         upperRightCloseButton?.draw(b);
         drawMouse(b);
+    }
+
+    /// <summary>Why a farmhand feels the way they do: every thought RimWorld says is affecting their mood.</summary>
+    private void DrawMoodPopup(SpriteBatch b)
+    {
+        hits.Clear();                       // everything underneath goes inert while the popup is open
+        var info = mod.LastHands.FirstOrDefault(h => (string?)h["name"] == moodPopup) as JObject;
+        int w = 640, ph = Math.Min(height - 60, 560);
+        var r = new Rectangle(xPositionOnScreen + (width - w) / 2, yPositionOnScreen + (height - ph) / 2, w, ph);
+        b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.45f);
+        drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60), r.X, r.Y, r.Width, r.Height, Color.White);
+
+        int x = r.X + 38, y = r.Y + 32;
+        if (info == null)
+        {
+            Text(b, $"{moodPopup}: no data yet. Open the Farmhands tab with RimWorld running.", x, y);
+        }
+        else
+        {
+            double mood = (double)info["mood"]!;
+            Text(b, $"{moodPopup}: mood {mood:0.00} ({(string)info["status"]!})", x, y, big: true);
+            y += 56;
+            var thoughts = info["thoughts"] as JArray ?? new JArray();
+            if (thoughts.Count == 0) Text(b, "RimWorld reports no mood factors yet.", x, y, Color.Gray);
+            foreach (var t in thoughts)
+            {
+                double off = (double)t["offset"]!;
+                Text(b, Fit((string)t["label"]!, 400), x, y);
+                Text(b, $"{off:+0.0;-0.0}", r.Right - 120, y, off >= 0 ? Color.ForestGreen : Color.Firebrick);
+                y += 28;
+                if (y > r.Bottom - 150) break;
+            }
+            y = r.Bottom - 130;
+            Text(b, "Needs", x, y);
+            if (info["needs"] is JObject needs)
+            {
+                string[] ks = { "food", "rest", "joy" };
+                for (int i = 0; i < ks.Length; i++)
+                {
+                    double v = (double?)needs[ks[i]] ?? 0;
+                    Text(b, char.ToUpper(ks[i][0]) + ks[i][1..], x + 90 + i * 170, y);
+                    Bar(b, new Rectangle(x + 90 + i * 170, y + 28, 140, 14), v, MoodColor(v));
+                }
+            }
+        }
+        Text(b, "Click anywhere to close", r.X + 38, r.Bottom - 40, Color.Gray);
+        hits.Add((new Rectangle(0, 0, Game1.uiViewport.Width, Game1.uiViewport.Height), () => moodPopup = null));
     }
 
     // ---------- tabs ----------
@@ -193,6 +243,7 @@ public class RimDewMenu : IClickableMenu
                     () => mod.SetPriority(n, task, (prio + 1) % 5), active: prio == 1);
             }
             string nm = name;
+            Button(b, new Rectangle(c.X + c.Width - 208, ry + 34, 94, 38), "Mood", () => moodPopup = nm);
             Button(b, new Rectangle(c.X + c.Width - 110, ry + 34, 100, 38), "Fire", () => mod.FireHand(nm));
         }
     }
@@ -281,18 +332,22 @@ public class RimDewMenu : IClickableMenu
             ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
                 ("Cheer everyone", () => mod.SendMoodEventToAll("festival", "birthday")), ("Upset everyone", () => mod.SendMoodEventToAll("gift_hated", "gift_hated")),
                 ("+200 research", () => mod.AddResearchPoints(200)) }),
+            ("Furniture (items go to your inventory; place them inside a bunkhouse)", new (string, Action)[] {
+                ("Bed", () => mod.GiveFurniture("bed")), ("Double bed", () => mod.GiveFurniture("doublebed")), ("Chair", () => mod.GiveFurniture("chair")),
+                ("Table", () => mod.GiveFurniture("table")), ("Bookcase", () => mod.GiveFurniture("bookcase")), ("Lamp", () => mod.GiveFurniture("lamp")),
+                ("TV", () => mod.GiveFurniture("tv")), ("Furnish bunkhouse", mod.FurnishBunkhouse) }),
             ("Storyteller (real incidents)", new (string, Action)[] { ("Raid", () => mod.FireRimWorldIncident("RaidEnemy")),
                 ("Infestation", () => mod.FireRimWorldIncident("Infestation")), ("Toxic fallout", () => mod.FireRimWorldIncident("ToxicFallout")),
                 ("Cold snap", () => mod.FireRimWorldIncident("ColdSnap")) }),
         };
 
-        const int cols = 5, gap = 8, bh = 38;
+        const int cols = 5, gap = 8, bh = 34;
         int bw = (c.Width - gap * (cols - 1)) / cols;
         int y = c.Y;
         foreach (var (title, buttons) in sections)
         {
             Text(b, title, c.X, y);
-            y += 26;
+            y += 24;
             for (int i = 0; i < buttons.Length; i++)
             {
                 int col = i % cols, row = i / cols;

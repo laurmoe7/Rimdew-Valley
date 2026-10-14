@@ -14,3 +14,14 @@ internal static class IsCarryingPatch
             __result = false;
     }
 }
+
+/// <summary>Draw farmhands from inside GameLocation.draw (the world's depth-sorted pass) so objects can hide them.</summary>
+[HarmonyPatch(typeof(GameLocation), nameof(GameLocation.draw))]
+internal static class LocationDrawPatch
+{
+    private static void Postfix(GameLocation __instance, Microsoft.Xna.Framework.Graphics.SpriteBatch b)
+    {
+        try { ModEntry.Instance?.DrawHandsInWorld(__instance, b); }
+        catch (Exception e) { ModEntry.Instance?.LogPatchError(e); }
+    }
+}

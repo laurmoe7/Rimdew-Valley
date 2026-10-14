@@ -277,7 +277,10 @@ namespace RimDewBridge
                 if (kv.Key.StartsWith("hand:"))
                 {
                     GainThought(p, paid ? "paid" : "unpaid");
-                    GainThought(p, m.Bool("housed", true) ? "housed" : "unhoused");
+                    bool housed = m.ContainsKey("housed_names")
+                        ? m.List("housed_names").Any(n => Convert.ToString(n) == kv.Key.Substring(5))
+                        : m.Bool("housed", true);
+                    GainThought(p, housed ? "housed" : "unhoused");
                 }
             }
             ApplyResearch(m.Num("research_points"));
@@ -300,6 +303,32 @@ namespace RimDewBridge
         {
             int v;
             return handPriority.TryGetValue(name + "|" + task, out v) ? v : def;
+        }
+
+        /// <summary>Every thought currently affecting the pawn's mood, biggest first, so Stardew can show why they feel as they do.</summary>
+        private static List<object> MoodThoughts(Pawn p)
+        {
+            var result = new List<object>();
+            if (p.needs == null || p.needs.mood == null) return result;
+            var all = new List<Thought>();
+            p.needs.mood.thoughts.GetAllMoodThoughts(all);
+            foreach (var t in all.OrderByDescending(t => Math.Abs(t.MoodOffset())).Take(14))
+            {
+                float off = t.MoodOffset();
+                if (Math.Abs(off) < 0.5f) continue;
+                result.Add(new Dictionary<string, object> { { "label", t.LabelCap }, { "offset", Math.Round(off, 1) } });
+            }
+            return result;
+        }
+
+        private static Dictionary<string, object> NeedLevels(Pawn p)
+        {
+            return new Dictionary<string, object>
+            {
+                { "food", p.needs.food != null ? Math.Round(p.needs.food.CurLevelPercentage, 2) : 0.0 },
+                { "rest", p.needs.rest != null ? Math.Round(p.needs.rest.CurLevelPercentage, 2) : 0.0 },
+                { "joy", p.needs.joy != null ? Math.Round(p.needs.joy.CurLevelPercentage, 2) : 0.0 }
+            };
         }
 
         /// <summary>Hand status without running a night: mood, skills and whether they could work right now.</summary>
@@ -344,6 +373,7 @@ namespace RimDewBridge
                     { "name", kv.Key.Substring(5) }, { "mood", Math.Round(mood, 2) },
                     { "plants", p.skills.GetSkill(SkillDefOf.Plants).Level }, { "animals", p.skills.GetSkill(SkillDefOf.Animals).Level },
                     { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
+                    { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
                 });
             }
@@ -390,6 +420,7 @@ namespace RimDewBridge
                 {
                     { "name", name }, { "mood", Math.Round(mood, 2) }, { "plants", plants }, { "animals", animals },
                     { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
+                    { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) },
                     { "hours", Math.Round(workedHours, 1) },
                     { "did_water", (int)mine["water"] }, { "did_harvest", (int)mine["harvest"] }, { "did_feed", (int)mine["animals"] },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }

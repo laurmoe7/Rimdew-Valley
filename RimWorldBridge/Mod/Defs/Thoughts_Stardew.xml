@@ -149,8 +149,8 @@
     <durationDays>0.67</durationDays>
     <stackLimit>1</stackLimit>
     <stages><li>
-      <label>nowhere to sleep</label>
-      <description>There is no bunk for me. I am sleeping rough.</description>
+      <label>no bed to sleep in</label>
+      <description>There is no bed for me in the bunkhouse. I am sleeping rough.</description>
       <baseMoodEffect>-9</baseMoodEffect>
     </li></stages>
   </ThoughtDef>
