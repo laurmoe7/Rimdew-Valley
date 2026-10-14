@@ -236,6 +236,8 @@ public partial class ModEntry
                 chest.Items.Add(ItemRegistry.Create("(O)771", 3));     // fiber for repairs
                 farm.objects[chestTile] = chest;
                 foreach (var n in data.Hands) data.Hunger[n] = 75;     // everyone is hungry
+                PlantTestPatch(); GrowAllCrops();                       // a field of fully grown parsnips: harvest at once, never water
+                doneWater = doneHarvest = 0;
                 Ft($"set up: stove/heater/cooler at {x + 2},{x + 4},{x + 6} row {y}; damaged sandbags at {x + 2},{y + 3}; chest with 6 parsnips, 1 honey, 3 fiber; hands hunger 75");
             }
             if (t >= 120 && t % 120 == 0 && t < 3000)
@@ -247,6 +249,12 @@ public partial class ModEntry
             if (t == 2000) Game1.activeClickableMenu = new RimDewMenu(this, 2);
             if (t == 2030) MenuShot("colony_tab");
             if (t == 2060) Game1.exitActiveMenu();
+            if (t == 2070) Game1.activeClickableMenu = new RimDewMenu(this, 5);
+            if (t == 2100) MenuShot("items_tab");
+            if (t == 2110) Game1.exitActiveMenu();
+            if (t == 2120) Game1.activeClickableMenu = new RimDewMenu(this, 6);
+            if (t == 2150) MenuShot("test_tab");
+            if (t == 2160) Game1.exitActiveMenu();
             if (t == 3000)
             {
                 // temperature: winter night, with and without the heater
@@ -277,7 +285,7 @@ public partial class ModEntry
             }
             if (t == 3100)
             {
-                Ft($"RESULT mealsLeft={CountFood(i => FoodGrade(i) == 3)} hunger=[{string.Join(" ", data.Hands.Select(n => n + ":" + HungerOf(n).ToString("0")))}] log=[{string.Join("; ", Defenses)}]");
+                Ft($"RESULT harvested={doneHarvest} watered={doneWater} cropsLeftReady={FarmCrops(farm).Count(c => c.dirt.readyForHarvest())} mealsLeft={CountFood(i => FoodGrade(i) == 3)} hunger=[{string.Join(" ", data.Hands.Select(n => n + ":" + HungerOf(n).ToString("0")))}] log=[{string.Join("; ", Defenses)}]");
                 foreach (var n in data.Hands) data.Hunger[n] = 25;
                 CleanTestObjects();
                 Game1.timeOfDay = ftTime;

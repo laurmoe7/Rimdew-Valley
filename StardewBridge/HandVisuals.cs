@@ -283,7 +283,8 @@ public partial class ModEntry
         int totalJobs = 0;
 
         var sprinklered = SprinklerTiles(farm);
-        var dry = FarmCrops(farm).Where(c => !sprinklered.Contains(c.tile) && c.dirt.state.Value != HoeDirt.watered).ToList();
+        // Fully grown crops are left alone: watering only matters while a crop is still growing (or regrowing after a harvest).
+        var dry = FarmCrops(farm).Where(c => !sprinklered.Contains(c.tile) && c.dirt.state.Value != HoeDirt.watered && !c.dirt.readyForHarvest()).ToList();
         var ready = FarmCrops(farm).Where(c => c.dirt.readyForHarvest()).ToList();
         var hungry = farm.getAllFarmAnimals().Where(a => a.fullness.Value < 200).ToList();
 
@@ -433,10 +434,10 @@ public partial class ModEntry
         var monsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
         foreach (var a in actors.Values)
         {
-            // Hands always carry a gun matched to their RimWorld Shooting skill, held low when not fighting.
+            // Each hand has a gun matched to their RimWorld Shooting skill, but it is only drawn while they are defending.
             var skillInfo = LastHands.FirstOrDefault(h => (string?)h["name"] == a.Name);
             a.Weapon = GunForSkill((int?)skillInfo?["shooting"] ?? 3);
-            a.Armed = !a.Inside;
+            a.Armed = false;   // guns only come out while defending (Fight() sets this)
             a.Aim = a.Dir switch { 0 => 1.25f, 1 => 0.35f, 2 => -1.25f, _ => MathHelper.Pi - 0.35f };
 
             bool busy = a.Current != null || a.Jobs.Count > 0;
@@ -585,7 +586,7 @@ public partial class ModEntry
         switch (j.Kind)
         {
             case "water":
-                if (farm.terrainFeatures.TryGetValue(j.Tile, out var tf) && tf is HoeDirt { crop: not null } dirt)
+                if (farm.terrainFeatures.TryGetValue(j.Tile, out var tf) && tf is HoeDirt { crop: not null } dirt && !dirt.readyForHarvest())
                 {
                     dirt.state.Value = HoeDirt.watered;
                     doneWater++;

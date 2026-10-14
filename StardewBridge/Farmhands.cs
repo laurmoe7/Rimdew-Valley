@@ -41,7 +41,7 @@ public partial class ModEntry
     private JObject BuildBacklog(Farm farm)
     {
         var sprinklered = SprinklerTiles(farm);
-        int water = FarmCrops(farm).Count(c => !sprinklered.Contains(c.tile));
+        int water = FarmCrops(farm).Count(c => !sprinklered.Contains(c.tile) && !c.dirt.readyForHarvest());   // a fully grown crop needs no water
         int harvest = FarmCrops(farm).Count(c => c.dirt.readyForHarvest());
         int animals = farm.getAllFarmAnimals().Count(a => a.fullness.Value < 200);
         return new JObject { ["water"] = water, ["harvest"] = harvest, ["animals"] = animals };

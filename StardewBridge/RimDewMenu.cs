@@ -8,9 +8,9 @@ using StardewValley.Menus;
 namespace StardewBridge;
 
 /// <summary>In-game control panel (F8). Immediate-mode: every frame draw() rebuilds the clickable regions.</summary>
-public class RimDewMenu : IClickableMenu
+public partial class RimDewMenu : IClickableMenu
 {
-    private static readonly string[] Tabs = { "Villagers", "Farmhands", "Colony", "Research", "Health", "Test" };
+    private static readonly string[] Tabs = { "Villagers", "Farmhands", "Colony", "Research", "Health", "Items", "Test" };
     private static readonly string[] Tasks = { "water", "harvest", "animals" };
     private static readonly Dictionary<string, string> TaskLabel = new() { ["water"] = "Water", ["harvest"] = "Harvest", ["animals"] = "Animals" };
 
@@ -48,6 +48,17 @@ public class RimDewMenu : IClickableMenu
             exitThisMenu();
             return;
         }
+        if (moodPopup == null && sbTrack != Rectangle.Empty && new Rectangle(sbTrack.X - 6, sbTrack.Y, sbTrack.Width + 12, sbTrack.Height).Contains(x, y))
+        {
+            sbDrag = true;
+            DragScrollbar(y);
+            return;
+        }
+        if (searchBox != null && tab == 5)
+        {
+            bool inside = searchRect.Contains(x, y);
+            searchBox.Selected = inside;
+        }
         foreach (var (rect, click) in hits.ToList())
             if (rect.Contains(x, y))
             {
@@ -57,7 +68,41 @@ public class RimDewMenu : IClickableMenu
             }
     }
 
-    public override void receiveScrollWheelAction(int direction) => scroll = Math.Max(0, scroll + (direction > 0 ? -1 : 1));
+    // Tabs 5 (Items) and 6 (Test) scroll in pixels; the list tabs scroll by row.
+    private bool PixelScroll => tab >= 5;
+
+    public override void receiveScrollWheelAction(int direction)
+    {
+        int step = PixelScroll ? (tab == 5 ? 36 : 60) : 1;
+        scroll = Math.Max(0, scroll + (direction > 0 ? -step : step));
+    }
+
+    private Rectangle sbTrack;
+    private int sbTotal, sbVisible;
+    private bool sbDrag;
+
+    /// <summary>Vertical scrollbar. <paramref name="total"/> and <paramref name="visible"/> are in the tab's scroll unit (rows or pixels).</summary>
+    private void DrawScrollbar(SpriteBatch b, Rectangle track, int total, int visible)
+    {
+        sbTrack = Rectangle.Empty;
+        if (total <= visible) { scroll = 0; return; }
+        scroll = Math.Clamp(scroll, 0, total - visible);
+        sbTrack = track; sbTotal = total; sbVisible = visible;
+        b.Draw(Game1.staminaRect, track, Color.Black * 0.25f);
+        int thumbH = Math.Max(36, track.Height * visible / total);
+        int thumbY = track.Y + (track.Height - thumbH) * scroll / (total - visible);
+        drawTextureBox(b, Game1.mouseCursors, new Rectangle(432, 439, 9, 9), track.X, thumbY, track.Width, thumbH, sbDrag ? Color.Wheat : Color.White, 2f, false);
+    }
+
+    private void DragScrollbar(int y)
+    {
+        int thumbH = Math.Max(36, sbTrack.Height * sbVisible / sbTotal);
+        double frac = Math.Clamp((y - sbTrack.Y - thumbH / 2.0) / Math.Max(1, sbTrack.Height - thumbH), 0, 1);
+        scroll = (int)Math.Round(frac * (sbTotal - sbVisible));
+    }
+
+    public override void leftClickHeld(int x, int y) { if (sbDrag) DragScrollbar(y); else base.leftClickHeld(x, y); }
+    public override void releaseLeftClick(int x, int y) { sbDrag = false; base.releaseLeftClick(x, y); }
 
     // ---------- drawing helpers ----------
     // Layout, top to bottom: title, tab row (+90), action row (+150), content (+210).
@@ -97,6 +142,7 @@ public class RimDewMenu : IClickableMenu
     public override void draw(SpriteBatch b)
     {
         hits.Clear();
+        sbTrack = Rectangle.Empty;
         b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
         drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60), xPositionOnScreen, yPositionOnScreen, width, height, Color.White);
 
@@ -111,9 +157,9 @@ public class RimDewMenu : IClickableMenu
         for (int i = 0; i < Tabs.Length; i++)
         {
             int idx = i;
-            var r = new Rectangle(tx, yPositionOnScreen + 90, 138, 48);
-            Button(b, r, Tabs[i], () => { tab = idx; scroll = 0; if (idx == 1) mod.RefreshRimWorld(); }, active: tab == i);
-            tx += 146;
+            var r = new Rectangle(tx, yPositionOnScreen + 90, 124, 48);
+            Button(b, r, Tabs[i], () => { tab = idx; scroll = 0; if (searchBox != null) searchBox.Selected = false; if (idx == 1) mod.RefreshRimWorld(); }, active: tab == i);
+            tx += 130;
         }
 
         switch (tab)
@@ -123,7 +169,8 @@ public class RimDewMenu : IClickableMenu
             case 2: DrawColony(b); break;
             case 3: DrawResearch(b); break;
             case 4: DrawHealth(b); break;
-            case 5: DrawTest(b); break;
+            case 5: DrawItems(b); break;
+            case 6: DrawTest(b); break;
         }
 
         if (moodPopup != null) DrawMoodPopup(b);
@@ -191,7 +238,8 @@ public class RimDewMenu : IClickableMenu
         var list = mod.npcMood.OrderBy(kv => kv.Value).ToList();
         int rows = Math.Max(1, c.Height / 34);
         scroll = Math.Min(scroll, Math.Max(0, list.Count - rows));
-        Text(b, $"Villagers ({list.Count}), lowest mood first. Scroll for more.", c.X, ActionY + 8);
+        Text(b, $"Villagers ({list.Count}), lowest mood first", c.X, ActionY + 8);
+        DrawScrollbar(b, new Rectangle(c.X + c.Width + 8, c.Y, 18, rows * 34), list.Count, rows);
         for (int i = 0; i < rows && i + scroll < list.Count; i++)
         {
             var (name, mood) = list[i + scroll];
@@ -221,6 +269,7 @@ public class RimDewMenu : IClickableMenu
         int rows = Math.Max(1, c.Height / 84);
         var hands = mod.Data.Hands;
         scroll = Math.Min(scroll, Math.Max(0, hands.Count - rows));
+        DrawScrollbar(b, new Rectangle(c.X + c.Width + 8, c.Y, 18, rows * 84), hands.Count, rows);
         for (int i = 0; i < rows && i + scroll < hands.Count; i++)
         {
             string name = hands[i + scroll];
@@ -369,16 +418,22 @@ public class RimDewMenu : IClickableMenu
 
         const int cols = 5, gap = 8, bh = 34;
         int bw = (c.Width - gap * (cols - 1)) / cols;
-        int y = ActionY + 4;   // the tab row is the only thing above, so start right under it
+        int viewTop = ActionY + 4, viewBottom = c.Y + c.Height;
+        int total = 0;
+        foreach (var (_, buttons) in sections) total += 32 + (buttons.Length + cols - 1) / cols * (bh + 4) + 4;
+        DrawScrollbar(b, new Rectangle(c.X + c.Width + 8, viewTop, 18, viewBottom - viewTop), total, viewBottom - viewTop);
+
+        int y = viewTop - scroll;
         foreach (var (title, buttons) in sections)
         {
-            Text(b, title, c.X, y);
+            if (y >= viewTop && y + 28 <= viewBottom) Text(b, title, c.X, y);
             y += 32;
             for (int i = 0; i < buttons.Length; i++)
             {
                 int col = i % cols, row = i / cols;
                 var (label, act) = buttons[i];
-                Button(b, new Rectangle(c.X + col * (bw + gap), y + row * (bh + 4), bw, bh), label, act);
+                var r = new Rectangle(c.X + col * (bw + gap), y + row * (bh + 4), bw, bh);
+                if (r.Y >= viewTop && r.Bottom <= viewBottom) Button(b, r, label, act);
             }
             y += (buttons.Length + cols - 1) / cols * (bh + 4) + 4;
         }

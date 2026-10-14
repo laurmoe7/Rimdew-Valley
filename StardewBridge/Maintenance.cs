@@ -106,6 +106,23 @@ public partial class ModEntry
             hand.Jobs.Enqueue(new HandJob { Kind = kind, Owner = hand.Name, Tile = tile, Via = chest.TileLocation, Item = item, Count = count });
             Monitor.Log($"[maint] {hand.Name}: {kind} at {tile.X},{tile.Y} ({count} x {item}) from chest at {chest.TileLocation.X},{chest.TileLocation.Y}", LogLevel.Debug);
         }
+
+        // 3. harvest crops the moment they are ready (hands whose Harvest priority is off stay out of the fields)
+        if (idle.Count == 0) return;
+        var claimed = new HashSet<Vector2>();
+        foreach (var a in actors.Values)
+        {
+            if (a.Current is { Kind: "harvest" } cur) claimed.Add(cur.Tile);
+            foreach (var j in a.Jobs.Where(j => j.Kind == "harvest")) claimed.Add(j.Tile);
+        }
+        var ready = FarmCrops(Game1.getFarm()).Where(c => c.dirt.readyForHarvest() && !claimed.Contains(c.tile)).ToList();
+        foreach (var hand in idle.OrderBy(a => a.Name))
+        {
+            if (ready.Count == 0) break;
+            if (data.Priorities.TryGetValue(hand.Name + "|harvest", out int prio) && prio == 0) continue;
+            foreach (var c in PickNearest(ready, 8, hand.Pos, x => x.tile * 64f))
+                hand.Jobs.Enqueue(new HandJob { Kind = "harvest", Tile = c.tile, Owner = hand.Name });
+        }
     }
 
     /// <summary>A generator is only worth feeding if its grid has demand or a battery with room.</summary>
