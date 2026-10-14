@@ -154,7 +154,16 @@ namespace RimDewBridge
         // ---- villager mood ----
         /// <summary>Instant mood target (baseline + all current thoughts). The visible bar eases toward this over game time,
         /// which would look stale while the colony is paused between nights.</summary>
-        private static float Mood(Pawn p) { return p.needs.mood.CurInstantLevelPercentage; }
+        private static readonly System.Reflection.FieldInfo MoodCheckTick =
+            typeof(Need_Mood).GetField("lastInstantMoodCheckTick", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        /// <summary>RimWorld caches the instant mood once per game tick. The colony stays paused between nights, so without this a new thought
+        /// (cheer, gift, hunger...) would not show in the mood until the next night.</summary>
+        private static float Mood(Pawn p)
+        {
+            if (MoodCheckTick != null) MoodCheckTick.SetValue(p.needs.mood, -1);
+            return p.needs.mood.CurInstantLevelPercentage;
+        }
 
         private static string Pascal(string kind)
         {

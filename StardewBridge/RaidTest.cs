@@ -48,6 +48,37 @@ public partial class ModEntry
         return string.Join(" | ", found);
     }
 
+    private bool chDone;
+    private int chStart = -1;
+    private Dictionary<string, double> chBefore = new();
+
+    /// <summary>RIMDEW_CHEERTEST=1: record villager moods, press "Cheer everyone", refresh, compare.</summary>
+    private void TickCheerTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_CHEERTEST") != "1" || chDone || !Context.IsWorldReady) return;
+        if (chStart < 0) chStart = (int)e.Ticks;
+        int t = (int)e.Ticks - chStart;
+        try
+        {
+            if (t == 120) { RefreshRimWorld(); Rt("CHEER refresh requested (baseline)"); }
+            if (t == 600)
+            {
+                chBefore = new Dictionary<string, double>(npcMood);
+                Rt($"CHEER baseline: {chBefore.Count} villagers known, avg mood {(chBefore.Count == 0 ? 0 : chBefore.Values.Average()):0.00}; RimWorldOnline={RimWorldOnline}; villagers that can socialize: {Utility.getAllVillagers().Count(n => n.CanSocialize)}");
+                SendMoodEventToAll("festival", "birthday");
+                Rt("CHEER events sent");
+            }
+            if (t == 700) RefreshRimWorld();
+            if (t == 1200)
+            {
+                var changed = npcMood.Where(kv => chBefore.TryGetValue(kv.Key, out var b) && Math.Abs(b - kv.Value) > 0.001).ToList();
+                Rt($"CHEER result: avg mood {(npcMood.Count == 0 ? 0 : npcMood.Values.Average()):0.00}; {changed.Count}/{npcMood.Count} villagers changed; sample: {string.Join(", ", npcMood.Take(5).Select(kv => $"{kv.Key} {chBefore.GetValueOrDefault(kv.Key):0.00}->{kv.Value:0.00}"))}");
+                chDone = true;
+            }
+        }
+        catch (Exception ex) { Rt("CHEER EXCEPTION: " + ex); chDone = true; }
+    }
+
     private bool cxDone;
     private int cxStart = -1;
 
@@ -433,6 +464,7 @@ public partial class ModEntry
         TickFreezerTest(e);
         TickDraftTest(e);
         TickChestSettingsTest(e);
+        TickCheerTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;
