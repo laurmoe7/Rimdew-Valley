@@ -1,5 +1,6 @@
 using HarmonyLib;
 using StardewValley;
+using StardewValley.Objects;
 
 namespace StardewBridge;
 
@@ -24,4 +25,20 @@ internal static class LocationDrawPatch
         try { ModEntry.Instance?.DrawHandsInWorld(__instance, b); }
         catch (Exception e) { ModEntry.Instance?.LogPatchError(e); }
     }
+}
+
+/// <summary>"Free crafting" setting: recipes always count as affordable and consume nothing.</summary>
+[HarmonyPatch(typeof(CraftingRecipe), "doesFarmerHaveIngredientsInInventory")]
+internal static class FreeCraftCheckPatch
+{
+    private static void Postfix(ref bool __result)
+    {
+        if (ModEntry.Instance?.Config.FreeCrafting == true) __result = true;
+    }
+}
+
+[HarmonyPatch(typeof(CraftingRecipe), "consumeIngredients")]
+internal static class FreeCraftConsumePatch
+{
+    private static bool Prefix() => ModEntry.Instance?.Config.FreeCrafting != true;
 }

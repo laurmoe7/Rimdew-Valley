@@ -80,7 +80,8 @@ public class RimDewMenu : IClickableMenu
         drawTextureBox(b, Game1.mouseCursors, new Rectangle(432, 439, 9, 9), r.X, r.Y, r.Width, r.Height,
             active ? Color.LightGreen : hover ? Color.Wheat : Color.White, 4f, false);
         var size = Game1.smallFont.MeasureString(label);
-        Text(b, label, r.X + (int)((r.Width - size.X) / 2), r.Y + (int)((r.Height - size.Y) / 2) + 2);
+        float scale = Math.Min(1f, (r.Width - 14) / size.X);   // shrink long labels so they stay inside the button
+        Utility.drawTextWithShadow(b, label, Game1.smallFont, new Vector2(r.X + (r.Width - size.X * scale) / 2, r.Y + (r.Height - size.Y * scale) / 2 + 2), Game1.textColor, scale);
         hits.Add((r, click));
     }
 
@@ -310,51 +311,51 @@ public class RimDewMenu : IClickableMenu
     private void DrawTest(SpriteBatch b)
     {
         var c = Content;
-        Text(b, "Test tools. Nothing is saved until you sleep, so quit without sleeping to undo.", c.X, ActionY + 8, Color.Gray);
 
         var sections = new (string title, (string label, Action act)[] buttons)[]
         {
+            ("Settings", new (string, Action)[] { ($"Free crafting: {(mod.Config.FreeCrafting ? "ON" : "off")}", mod.ToggleFreeCrafting) }),
             ("Farm", new (string, Action)[] { ("Clear debris", mod.ClearDebris), ("Plant test crops", mod.PlantTestPatch),
                 ("Grow crops now", mod.GrowAllCrops), ("Give test kit", mod.GiveTestKit),
                 ("Place bunkhouse", mod.PlaceBunkhouse), ("Power kit", mod.GivePowerKit), ("Defense kit", mod.GiveDefenseKit) }),
             ("Player", new (string, Action)[] { ("Max tools", mod.MaxTools), ("36-slot backpack", mod.MaxBackpack), ("Max skills", mod.MaxSkills),
                 ("Full heal+energy", mod.FullRestore), ("+50,000g", () => mod.AddMoney(50000)), ("Max friendship", mod.MaxFriendship),
                 ("Clear monsters", mod.ClearMonsters), ("Time: 6pm", () => mod.SetTime(1800)) }),
-            ("Monsters (local)", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
+            ("Monsters", new (string, Action)[] { ("Slimes x3", () => mod.SpawnMonsters(3, "slime")), ("Bats x3", () => mod.SpawnMonsters(3, "bat")),
                 ("Brutes x2", () => mod.SpawnMonsters(2, "brute")), ("Skeletons x2", () => mod.SpawnMonsters(2, "skeleton")),
                 ("Weapons kit", mod.GiveWeaponsKit) }),
-            ("RimWorld guns (hold left click to fire)", new (string, Action)[] { ("All guns", mod.GiveAllGuns),
+            ("RimWorld guns", new (string, Action)[] { ("All guns", mod.GiveAllGuns),
                 ("Revolver", () => mod.GiveGunById("Revolver")), ("Assault rifle", () => mod.GiveGunById("AssaultRifle")),
                 ("Shotgun", () => mod.GiveGunById("Shotgun")), ("Sniper rifle", () => mod.GiveGunById("SniperRifle")),
                 ("Minigun", () => mod.GiveGunById("Minigun")) }),
-            ("Injury (-15 HP)", new (string, Action)[] { ("Hurt: blunt", () => mod.HurtMe("blunt", 15)), ("Hurt: bite", () => mod.HurtMe("bite", 15)),
+            ("Injury", new (string, Action)[] { ("Hurt: blunt", () => mod.HurtMe("blunt", 15)), ("Hurt: bite", () => mod.HurtMe("bite", 15)),
                 ("Hurt: cut", () => mod.HurtMe("cut", 15)), ("Tend wounds", mod.Tend) }),
             ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
                 ("Cheer everyone", () => mod.SendMoodEventToAll("festival", "birthday")), ("Upset everyone", () => mod.SendMoodEventToAll("gift_hated", "gift_hated")),
                 ("+200 research", () => mod.AddResearchPoints(200)) }),
-            ("Furniture (items go to your inventory; place them inside a bunkhouse, or browse the free catalogue)", new (string, Action)[] {
+            ("Furniture", new (string, Action)[] {
                 ("Bed", () => mod.GiveFurniture("bed")), ("Double bed", () => mod.GiveFurniture("doublebed")), ("Chair", () => mod.GiveFurniture("chair")),
                 ("Table", () => mod.GiveFurniture("table")), ("Bookcase", () => mod.GiveFurniture("bookcase")), ("Lamp", () => mod.GiveFurniture("lamp")),
                 ("TV", () => mod.GiveFurniture("tv")), ("Free catalogue", mod.OpenFurnitureCatalogue) }),
-            ("Storyteller (real incidents)", new (string, Action)[] { ("Raid", () => mod.FireRimWorldIncident("RaidEnemy")),
+            ("Storyteller", new (string, Action)[] { ("Raid", () => mod.FireRimWorldIncident("RaidEnemy")),
                 ("Infestation", () => mod.FireRimWorldIncident("Infestation")), ("Toxic fallout", () => mod.FireRimWorldIncident("ToxicFallout")),
                 ("Cold snap", () => mod.FireRimWorldIncident("ColdSnap")) }),
         };
 
         const int cols = 5, gap = 8, bh = 34;
         int bw = (c.Width - gap * (cols - 1)) / cols;
-        int y = c.Y;
+        int y = ActionY + 4;   // the tab row is the only thing above, so start right under it
         foreach (var (title, buttons) in sections)
         {
             Text(b, title, c.X, y);
-            y += 24;
+            y += 32;
             for (int i = 0; i < buttons.Length; i++)
             {
                 int col = i % cols, row = i / cols;
                 var (label, act) = buttons[i];
                 Button(b, new Rectangle(c.X + col * (bw + gap), y + row * (bh + 4), bw, bh), label, act);
             }
-            y += (buttons.Length + cols - 1) / cols * (bh + 4) + 6;
+            y += (buttons.Length + cols - 1) / cols * (bh + 4) + 4;
         }
     }
 }

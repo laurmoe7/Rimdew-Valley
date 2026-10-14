@@ -105,6 +105,13 @@ public partial class ModEntry
         ApplyRecipeGating();
     }
 
+    internal void ToggleFreeCrafting()
+    {
+        Config.FreeCrafting = !Config.FreeCrafting;
+        Helper.WriteConfig(Config);
+        Hud(Config.FreeCrafting ? "Free crafting ON: no materials needed." : "Free crafting off.", HUDMessage.achievement_type);
+    }
+
     internal void Tend() { if (Ready()) TendCommand(); }
 
     internal void OpenMenu()
