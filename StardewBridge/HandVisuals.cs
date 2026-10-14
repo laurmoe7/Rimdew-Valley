@@ -26,6 +26,7 @@ public partial class ModEntry
         public string Item = "";           // refuel/reload: qualified id fetched (wood or copper ore)
         public int Count, Carry;           // how many to fetch / how many are in hand
         public bool Fetched;
+        public List<Item> Held = new();    // items taken from the chest and not yet used
         public Vector2? Stand;             // chosen stand spot for the current phase (cleared when the phase changes)
         public bool StandPhase;
     }
@@ -398,10 +399,15 @@ public partial class ModEntry
                 var push = dist < 0.5f ? new Vector2(1, 0) : d / dist;
                 float amount = (56 - dist) * 0.5f;
                 // A hand that is walking somewhere barely gets shoved, so two hands heading opposite ways in a narrow gap can pass each other.
-                TryNudge(list[i], -push * amount * (list[i].Moving ? 0.15f : 1f));
-                TryNudge(list[j], push * amount * (list[j].Moving ? 0.15f : 1f));
+                // A hand in the middle of a job never gets shoved off its spot (that restarted the job timer forever).
+                TryNudge(list[i], -push * amount * PushFactor(list[i], list[j]));
+                TryNudge(list[j], push * amount * PushFactor(list[j], list[i]));
             }
     }
+
+    private static bool Working(HandActor a) => a.Current != null && a.WorkTimer > 0 && !a.Moving;
+
+    private static float PushFactor(HandActor a, HandActor other) => Working(a) ? 0f : Working(other) ? 1.5f : a.Moving ? 0.15f : 1f;
 
     private void TryNudge(HandActor a, Vector2 by)
     {
@@ -452,6 +458,14 @@ public partial class ModEntry
                 a.Pos = target;
                 arrived = true;
             }
+            if (!arrived && a.Current != null)
+            {
+                // Watchdog: two hands crowding the same spot can lock each other in place. If this hand has not moved for ~2 seconds
+                // and is already close to its spot, put it on the spot (a walkable tile) so the job can proceed.
+                a.StuckTicks = Vector2.DistanceSquared(a.Pos, a.LastPos) < 0.25f ? a.StuckTicks + 1 : 0;
+                a.LastPos = a.Pos;
+                if (a.StuckTicks > 120 && Vector2.Distance(a.Pos, target) < 192f) { a.Pos = target; a.StuckTicks = 0; a.PathGoal = new Point(-99999, -99999); arrived = true; }
+            }
             if (!arrived)
             {
                 a.Activity = a.Current == null ? "heading home" : "walking";
@@ -472,12 +486,15 @@ public partial class ModEntry
                     "water" => "watering", "harvest" => "harvesting",
                     "refuel" => a.Current.Fetched ? "refueling" : "fetching wood",
                     "reload" => a.Current.Fetched ? "reloading" : "fetching ore",
+                    "repair" => a.Current.Fetched ? "repairing" : "fetching fiber",
+                    "cook" => a.Current.Fetched ? "cooking" : "fetching food",
+                    "eat" => "eating",
                     _ => "feeding"
                 };
                 if (++a.WorkTimer >= WorkTicks)
                 {
                     a.WorkTimer = 0;
-                    if (IsMaintJob(a.Current) && !a.Current.Fetched) { if (!FetchSupplies(a.Current)) a.Current = null; }
+                    if (IsMaintJob(a.Current) && a.Current.Via.HasValue && !a.Current.Fetched) { if (!FetchSupplies(a.Current)) a.Current = null; }
                     else { Perform(a.Current); a.Current = null; }
                 }
             }
@@ -586,6 +603,9 @@ public partial class ModEntry
                 break;
             case "refuel":
             case "reload":
+            case "repair":
+            case "cook":
+            case "eat":
                 DoMaintenance(j);
                 break;
             case "animals":

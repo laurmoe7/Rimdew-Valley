@@ -10,7 +10,7 @@ namespace StardewBridge;
 /// <summary>In-game control panel (F8). Immediate-mode: every frame draw() rebuilds the clickable regions.</summary>
 public class RimDewMenu : IClickableMenu
 {
-    private static readonly string[] Tabs = { "Villagers", "Farmhands", "Research", "Health", "Test" };
+    private static readonly string[] Tabs = { "Villagers", "Farmhands", "Colony", "Research", "Health", "Test" };
     private static readonly string[] Tasks = { "water", "harvest", "animals" };
     private static readonly Dictionary<string, string> TaskLabel = new() { ["water"] = "Water", ["harvest"] = "Harvest", ["animals"] = "Animals" };
 
@@ -111,18 +111,19 @@ public class RimDewMenu : IClickableMenu
         for (int i = 0; i < Tabs.Length; i++)
         {
             int idx = i;
-            var r = new Rectangle(tx, yPositionOnScreen + 90, 160, 48);
+            var r = new Rectangle(tx, yPositionOnScreen + 90, 138, 48);
             Button(b, r, Tabs[i], () => { tab = idx; scroll = 0; if (idx == 1) mod.RefreshRimWorld(); }, active: tab == i);
-            tx += 170;
+            tx += 146;
         }
 
         switch (tab)
         {
             case 0: DrawVillagers(b); break;
             case 1: DrawFarmhands(b); break;
-            case 2: DrawResearch(b); break;
-            case 3: DrawHealth(b); break;
-            case 4: DrawTest(b); break;
+            case 2: DrawColony(b); break;
+            case 3: DrawResearch(b); break;
+            case 4: DrawHealth(b); break;
+            case 5: DrawTest(b); break;
         }
 
         if (moodPopup != null) DrawMoodPopup(b);
@@ -306,6 +307,30 @@ public class RimDewMenu : IClickableMenu
         var injuries = ((JArray)h["injuries"]!).Select(x => (string)x!).ToList();
         if (injuries.Count == 0) Text(b, "None", c.X + 20, c.Y + 222, Color.ForestGreen);
         for (int i = 0; i < injuries.Count; i++) Text(b, "- " + Fit(injuries[i], c.Width - 40), c.X + 20, c.Y + 222 + i * 30);
+    }
+
+    private void DrawColony(SpriteBatch b)
+    {
+        var c = Content;
+        double outdoor = mod.OutdoorTemp();
+        Text(b, $"Outdoors: {outdoor:0} C", c.X, c.Y - 4, outdoor < 5 || outdoor > 32 ? Color.Firebrick : Color.ForestGreen);
+        var f = mod.FoodSummary();
+        Text(b, $"Food in chests: {f.meals} meals, {f.snacks} snacks, {f.raw} raw", c.X + 260, c.Y - 4, f.meals + f.snacks + f.raw == 0 ? Color.Firebrick : Game1.textColor);
+        var hands = mod.Data.Hands;
+        if (hands.Count == 0) { Text(b, "No farmhands hired.", c.X, c.Y + 50, Color.Gray); return; }
+        Text(b, "Hunger", c.X + 230, c.Y + 36, Color.Gray);
+        Text(b, "Temperature", c.X + 520, c.Y + 36, Color.Gray);
+        for (int i = 0; i < hands.Count; i++)
+        {
+            int ry = c.Y + 70 + i * 40;
+            string nm = hands[i];
+            Text(b, nm, c.X, ry);
+            double hunger = mod.HungerOf(nm);
+            Bar(b, new Rectangle(c.X + 230, ry + 4, 220, 22), hunger / 100.0, hunger >= 70 ? Color.Firebrick : hunger >= 50 ? Color.Goldenrod : Color.ForestGreen);
+            Text(b, $"{hunger:0}", c.X + 460, ry);
+            var (temp, status) = mod.HandClimate(nm);
+            Text(b, $"{temp:0} C {(status == "" ? "" : "(" + status + ")")}", c.X + 520, ry, status == "" ? Game1.textColor : Color.Firebrick);
+        }
     }
 
     private void DrawTest(SpriteBatch b)

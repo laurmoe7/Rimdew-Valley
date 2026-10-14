@@ -33,6 +33,9 @@ public partial class ModEntry
         new("SolarPanel",    "Solar Panel",    "Up to 500 W in daylight; much less in rain.",                          "Solar Panel",    "335 3 334 5 338 3"),
         new("PowerBattery",  "Battery",        "Stores 2000 Wh. Smooths out day and night.",                           "Battery",        "335 2 334 5 388 10"),
         new("MiniTurret",    "Mini-Turret",    "Shoots monsters on its own. Needs 100 W and copper ore as ammo (10 shots each, holds 100).",                             "Mini-Turret",    "335 5 334 3 390 10"),
+        new("ElectricStove", "Electric Stove", "Hands cook raw crops into Simple Meals here. Needs 150 W.",              "Electric Stove", "335 2 334 3 390 10"),
+        new("Heater",        "Heater",         "Warms hands within 7 tiles (or a nearby bunkhouse) toward 21 C. Needs 250 W.",  "Heater",         "335 3 382 5 334 2"),
+        new("Cooler",        "Cooler",         "Cools hands within 7 tiles (or a nearby bunkhouse) toward 24 C. Needs 250 W.",  "Cooler",         "335 3 334 3 338 2"),
     };
 
     private static readonly HashSet<string> PowerRecipeNames = PowerItems.Select(p => p.Recipe).Concat(DefItems.Select(d => d.Recipe)).ToHashSet();
@@ -156,6 +159,23 @@ public partial class ModEntry
         for (int k = 0; k < 4; k++) Rect(3, 5, 15 + k * 4, 6, 3, new Color(84, 204, 96));
         Rect(3, 3, 28, 10, 2, new Color(34, 38, 46));
 
+        // electric stove (cell 5)
+        var enamel = new Color(214, 218, 224); var enamelD = new Color(150, 156, 168);
+        Rect(5, 1, 14, 14, 16, enamel); Rect(5, 1, 14, 14, 2, new Color(240, 242, 246)); Rect(5, 1, 28, 14, 2, enamelD);
+        Rect(5, 3, 17, 4, 3, new Color(50, 50, 56)); Rect(5, 9, 17, 4, 3, new Color(50, 50, 56));
+        Rect(5, 4, 18, 2, 1, new Color(230, 90, 40)); Rect(5, 10, 18, 2, 1, new Color(230, 90, 40));
+        Rect(5, 3, 22, 10, 6, enamelD); Rect(5, 4, 23, 8, 4, new Color(70, 76, 90));
+        for (int k = 0; k < 3; k++) Set(5, 4 + k * 3, 21, new Color(60, 60, 66));
+        // heater (cell 6)
+        var hd = new Color(76, 60, 56);
+        Rect(6, 2, 14, 12, 16, hd); Rect(6, 2, 14, 12, 2, new Color(110, 88, 80));
+        for (int k = 0; k < 5; k++) Rect(6, 4, 18 + k * 2, 8, 1, k % 2 == 0 ? new Color(255, 150, 50) : new Color(220, 70, 30));
+        Rect(6, 3, 28, 3, 2, dark); Rect(6, 10, 28, 3, 2, dark);
+        // cooler (cell 7)
+        var cw = new Color(196, 214, 232); var cwD = new Color(120, 150, 184);
+        Rect(7, 2, 13, 12, 17, cw); Rect(7, 2, 13, 12, 2, new Color(232, 242, 252)); Rect(7, 2, 28, 12, 2, cwD);
+        Rect(7, 4, 17, 8, 8, cwD); Rect(7, 5, 18, 6, 6, new Color(60, 100, 160));
+        Rect(7, 7, 20, 2, 2, new Color(210, 230, 250)); Rect(7, 5, 21, 6, 1, new Color(100, 140, 200)); Rect(7, 7, 18, 1, 6, new Color(100, 140, 200));
         // 4 turret (barrel is drawn on top at runtime)
         var olive = new Color(104, 118, 100); var oliveL = new Color(144, 160, 136); var oliveD = new Color(70, 80, 68);
         Rect(4, 3, 27, 10, 4, oliveD); Rect(4, 5, 25, 6, 2, olive);
@@ -191,10 +211,11 @@ public partial class ModEntry
 
     private static string KindOf(SObject o) => o.ItemId[PowerPrefix.Length..] switch
     {
-        "PowerPole" => "Pole", "WoodGenerator" => "Generator", "SolarPanel" => "Solar", "PowerBattery" => "Battery", "MiniTurret" => "Turret", _ => ""
+        "PowerPole" => "Pole", "WoodGenerator" => "Generator", "SolarPanel" => "Solar", "PowerBattery" => "Battery", "MiniTurret" => "Turret",
+        "ElectricStove" => "Stove", "Heater" => "Heater", "Cooler" => "Cooler", _ => ""
     };
 
-    private static double GetD(SObject o, string key) => o.modData.TryGetValue(key, out var s) && double.TryParse(s, out var v) ? v : 0;
+    private static double GetD(SObject o, string key, double def = 0) => o.modData.TryGetValue(key, out var s) && double.TryParse(s, out var v) ? v : def;
     private static void SetD(SObject o, string key, double v) => o.modData[key] = v.ToString("0.###");
 
     /// <summary>Rescan the farm for power objects and re-link them.</summary>
@@ -249,6 +270,8 @@ public partial class ModEntry
             {
                 case "Solar": n.Supply = SolarPeakWatts * sun; g.Supply += n.Supply; break;
                 case "Turret": n.Demand = TurretWatts; g.Demand += n.Demand; break;
+                case "Stove": n.Demand = 150; g.Demand += n.Demand; break;
+                case "Heater": case "Cooler": n.Demand = 250; g.Demand += n.Demand; break;
                 case "Battery": g.Charge += GetD(n.Obj, ChargeKey); g.Capacity += BatteryCapWh; break;
             }
         }
@@ -292,7 +315,7 @@ public partial class ModEntry
             foreach (var b in bats) SetD(b.Obj, ChargeKey, grids[gi].Charge / bats.Count);
         }
         foreach (var n in pNodes.Values)
-            if (n.Kind is "Turret" or "Battery" or "Solar" or "Pole") n.Online = grids[n.Grid].Satisfaction >= 0.5 && (n.Kind != "Solar" || n.Supply > 1);
+            if (n.Kind is "Turret" or "Battery" or "Solar" or "Pole" or "Stove" or "Heater" or "Cooler") n.Online = grids[n.Grid].Satisfaction >= 0.5 && (n.Kind != "Solar" || n.Supply > 1);
     }
 
     private int lastPowerScan = -999;
@@ -419,6 +442,9 @@ public partial class ModEntry
             "Battery" => $"Battery: {GetD(o, ChargeKey):0} / {BatteryCapWh:0} Wh.{grid}",
             "Solar" => $"Solar panel: {(n?.Supply ?? 0):0} W now.{grid}",
             "Turret" => $"Mini-turret: {(n?.Online == true ? "online" : "NO POWER")}, ammo {GetD(o, AmmoKey):0}/{MaxAmmo:0}.{grid}",
+            "Stove" => $"Electric stove: {(n?.Online == true ? "powered" : "NO POWER")}.{grid}",
+            "Heater" => $"Heater: {(n?.Online == true ? "warming" : "NO POWER")}.{grid}",
+            "Cooler" => $"Cooler: {(n?.Online == true ? "cooling" : "NO POWER")}.{grid}",
             _ => $"Power pole.{grid}"
         };
     }

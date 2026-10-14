@@ -21,7 +21,9 @@ public partial class ModEntry
         ["Electricity"] = new[] { "Power Pole", "Wood Generator", "Battery" },
         ["SolarPower"] = new[] { "Solar Panel" },
         ["MiniTurret"] = new[] { "Mini-Turret" },
-        ["Defenses"] = new[] { "Sandbags", "Spike Trap", "Explosive Trap" }
+        ["Defenses"] = new[] { "Sandbags", "Spike Trap", "Explosive Trap" },
+        ["Climate"] = new[] { "Heater", "Cooler" },
+        ["Cooking"] = new[] { "Electric Stove" }
     };
 
     internal JArray lastProjects = new();

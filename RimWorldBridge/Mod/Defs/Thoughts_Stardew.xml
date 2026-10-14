@@ -155,4 +155,104 @@
     </li></stages>
   </ThoughtDef>
 
+
+  <ThoughtDef>
+    <defName>SD_AteMeal</defName>
+    <durationDays>1</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>ate a cooked meal</label>
+      <description>A proper hot meal. Lovely.</description>
+      <baseMoodEffect>8</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_AteSnack</defName>
+    <durationDays>0.5</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>ate a snack</label>
+      <description>Just a nibble, but it helped.</description>
+      <baseMoodEffect>3</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_AteRaw</defName>
+    <durationDays>0.5</durationDays>
+    <stackLimit>2</stackLimit>
+    <stages><li>
+      <label>ate raw food</label>
+      <description>Raw vegetables again. Could someone cook?</description>
+      <baseMoodEffect>-4</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Hungry</defName>
+    <durationDays>0.4</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>hungry</label>
+      <description>My stomach is growling.</description>
+      <baseMoodEffect>-4</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Starving</defName>
+    <durationDays>0.6</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>starving</label>
+      <description>I have not eaten in far too long.</description>
+      <baseMoodEffect>-14</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Cold</defName>
+    <durationDays>0.4</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>cold</label>
+      <description>It is freezing out here.</description>
+      <baseMoodEffect>-6</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Freezing</defName>
+    <durationDays>0.4</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>freezing</label>
+      <description>I am so cold I can barely feel my fingers.</description>
+      <baseMoodEffect>-14</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Hot</defName>
+    <durationDays>0.4</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>hot</label>
+      <description>It is sweltering.</description>
+      <baseMoodEffect>-6</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
+  <ThoughtDef>
+    <defName>SD_Sweltering</defName>
+    <durationDays>0.4</durationDays>
+    <stackLimit>1</stackLimit>
+    <stages><li>
+      <label>sweltering</label>
+      <description>This heat is unbearable.</description>
+      <baseMoodEffect>-14</baseMoodEffect>
+    </li></stages>
+  </ThoughtDef>
+
 </Defs>

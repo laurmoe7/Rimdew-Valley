@@ -123,4 +123,26 @@
     <researchViewX>4</researchViewX>
     <researchViewY>1</researchViewY>
   </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Climate</defName>
+    <label>climate control</label>
+    <description>Heaters and coolers.</description>
+    <baseCost>600</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>5</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Cooking</defName>
+    <label>electric stoves</label>
+    <description>Cook raw crops into meals.</description>
+    <baseCost>450</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>5</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
 </Defs>

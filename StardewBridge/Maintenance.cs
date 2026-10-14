@@ -6,45 +6,52 @@ using SObject = StardewValley.Object;
 
 namespace StardewBridge;
 
-/// <summary>Idle farmhands keep the defences running: they fetch wood or copper ore from a chest on the farm, then refuel
-/// low generators and reload low turrets. Reloading earns Shooting XP.</summary>
+/// <summary>Idle farmhands look after the valley between chores: eat when hungry, fetch wood or copper ore from a farm chest
+/// and refuel generators / reload turrets, cook raw crops at a powered stove, and patch up damaged sandbags.
+/// Reloading earns Shooting XP.</summary>
 public partial class ModEntry
 {
-    private const string WoodId = "(O)388", OreId = "(O)378";
+    private const string WoodId = "(O)388", OreId = "(O)378", FiberId = "(O)771";
     private const double RefuelBelowHours = 8, ReloadBelowAmmo = 40;
+    private const int RepairBelowHp = 60;
 
-    private static bool IsMaintJob(HandJob j) => j.Kind is "refuel" or "reload";
+    private static bool IsMaintJob(HandJob j) => j.Kind is "refuel" or "reload" or "repair" or "cook" or "eat";
 
     private IEnumerable<Chest> FarmChests() =>
         Game1.getFarm().objects.Values.OfType<Chest>().Where(c => c.playerChest.Value && c.SpecialChestType == Chest.SpecialChestTypes.None);
 
-    private int ChestStock(string qid) => FarmChests().Sum(c => c.Items.Where(i => i?.QualifiedItemId == qid).Sum(i => i.Stack));
+    /// <summary>What a job's <c>Item</c> key means: a qualified item id, or "raw" for any raw crop.</summary>
+    private static Func<Item?, bool> Matcher(string key) => key == "raw" ? IsRawFood : i => i?.QualifiedItemId == key;
 
-    private Chest? NearestChestWith(string qid, Vector2 tile) =>
-        FarmChests().Where(c => c.Items.Any(i => i?.QualifiedItemId == qid)).OrderBy(c => Vector2.DistanceSquared(c.TileLocation, tile)).FirstOrDefault();
+    private int ChestStock(string key) => CountFood(Matcher(key));
 
-    /// <summary>Take up to <paramref name="want"/> of an item from the chest (stack by stack). Returns how many came out.</summary>
-    private static int TakeFromChest(Chest chest, string qid, int want)
+    private Chest? NearestChestWith(string key, Vector2 tile) =>
+        FarmChests().Where(c => c.Items.Any(Matcher(key))).OrderBy(c => Vector2.DistanceSquared(c.TileLocation, tile)).FirstOrDefault();
+
+    /// <summary>Take up to <paramref name="want"/> matching items out of the chest. Returns what came out (stacks are split).</summary>
+    private static List<Item> TakeFromChest(Chest chest, Func<Item?, bool> pred, int want)
     {
+        var taken = new List<Item>();
         int got = 0;
-        foreach (var item in chest.Items.Where(i => i?.QualifiedItemId == qid).ToList())
+        foreach (var item in chest.Items.Where(pred).ToList())
         {
             int take = Math.Min(want - got, item.Stack);
+            var piece = item.getOne(); piece.Stack = take;
+            taken.Add(piece);
             item.Stack -= take;
             got += take;
             if (item.Stack <= 0) chest.Items.Remove(item);
             if (got >= want) break;
         }
-        return got;
+        return taken;
     }
 
     private bool Calm() => !Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Any(m => m.Health > 0);
 
-    /// <summary>Every couple of seconds, give idle hands something to maintain.</summary>
+    /// <summary>Every couple of seconds, give idle hands something to do.</summary>
     private void TickMaintenance()
     {
         if (Game1.ticks % 90 != 0 || actors.Count == 0 || !Calm()) return;
-        if (Game1.timeOfDay < 600 || Game1.timeOfDay >= 2200) return;
 
         var reserved = new HashSet<Vector2>();
         foreach (var a in actors.Values)
@@ -52,28 +59,52 @@ public partial class ModEntry
             if (a.Current is { } c && IsMaintJob(c)) reserved.Add(c.Tile);
             foreach (var j in a.Jobs.Where(IsMaintJob)) reserved.Add(j.Tile);
         }
-
         var idle = actors.Values.Where(a => a.Current == null && a.Jobs.Count == 0 && HandCanFight(a)).ToList();
         if (idle.Count == 0) return;
 
-        int woodLeft = ChestStock(WoodId), oreLeft = ChestStock(OreId);
+        // 1. hungry hands eat first (day or night)
+        foreach (var hand in idle.ToList())
+        {
+            if (HungerOf(hand.Name) < EatAt) continue;
+            var food = FindBestFood(hand.Pos / 64f);
+            if (food == null) continue;
+            idle.Remove(hand);
+            hand.Jobs.Enqueue(new HandJob { Kind = "eat", Owner = hand.Name, Tile = food.Value.chest.TileLocation });
+            Monitor.Log($"[maint] {hand.Name} is hungry ({HungerOf(hand.Name):0}) and goes to eat from the chest at {food.Value.chest.TileLocation.X},{food.Value.chest.TileLocation.Y}", LogLevel.Debug);
+        }
+
+        // 2. upkeep, in daylight hours only
+        if (idle.Count == 0 || Game1.timeOfDay < 600 || Game1.timeOfDay >= 2200) return;
+
+        int woodLeft = ChestStock(WoodId), oreLeft = ChestStock(OreId), fiberLeft = ChestStock(FiberId), rawLeft = ChestStock("raw");
+        int meals = CountFood(i => FoodGrade(i) == 3);
+        bool wantMeals = meals < Math.Max(2, data.Hands.Count * 2);
+
+        var tasks = new List<(Vector2 tile, string kind, string item, int count)>();
         foreach (var n in pNodes.Values)
         {
-            if (idle.Count == 0) break;
             if (reserved.Contains(n.Tile)) continue;
-            string? kind = null; int count = 0; string qid = "";
             if (n.Kind == "Generator" && GetD(n.Obj, FuelKey) <= RefuelBelowHours && woodLeft > 0 && GridWantsPower(n))
-            { kind = "refuel"; qid = WoodId; count = (int)Math.Min(5, Math.Min(woodLeft, Math.Ceiling((MaxFuelHours - GetD(n.Obj, FuelKey)) / HoursPerWood))); woodLeft -= count; }
+            { int c = (int)Math.Min(5, Math.Min(woodLeft, Math.Ceiling((MaxFuelHours - GetD(n.Obj, FuelKey)) / HoursPerWood))); woodLeft -= c; tasks.Add((n.Tile, "refuel", WoodId, c)); }
             else if (n.Kind == "Turret" && GetD(n.Obj, AmmoKey) <= ReloadBelowAmmo && oreLeft > 0)
-            { kind = "reload"; qid = OreId; count = (int)Math.Min(10, Math.Min(oreLeft, Math.Floor((MaxAmmo - GetD(n.Obj, AmmoKey)) / AmmoPerOre))); oreLeft -= count; }
-            if (kind == null || count <= 0) continue;
+            { int c = (int)Math.Min(10, Math.Min(oreLeft, Math.Floor((MaxAmmo - GetD(n.Obj, AmmoKey)) / AmmoPerOre))); oreLeft -= c; tasks.Add((n.Tile, "reload", OreId, c)); }
+            else if (n.Kind == "Stove" && n.Online && wantMeals && rawLeft >= 2)
+            { rawLeft -= 2; wantMeals = false; tasks.Add((n.Tile, "cook", "raw", 2)); }
+        }
+        foreach (var (tile, o) in Game1.getFarm().objects.Pairs)
+            if (IsSandbag(o) && !reserved.Contains(tile) && fiberLeft > 0 && (int)GetD(o, HpKey, SandbagHp) <= RepairBelowHp)
+            { fiberLeft--; tasks.Add((tile, "repair", FiberId, 1)); }
 
-            var chest = NearestChestWith(qid, n.Tile);
+        foreach (var (tile, kind, item, count) in tasks)
+        {
+            if (idle.Count == 0) break;
+            if (count <= 0) continue;
+            var chest = NearestChestWith(item, tile);
             if (chest == null) continue;
-            var hand = idle.OrderBy(a => Vector2.DistanceSquared(a.Pos, n.Tile * 64f)).First();
+            var hand = idle.OrderBy(a => Vector2.DistanceSquared(a.Pos, tile * 64f)).First();
             idle.Remove(hand);
-            hand.Jobs.Enqueue(new HandJob { Kind = kind, Owner = hand.Name, Tile = n.Tile, Via = chest.TileLocation, Item = qid, Count = count });
-            Monitor.Log($"[maint] {hand.Name}: {kind} {n.Kind} at {n.Tile.X},{n.Tile.Y} ({count} x {qid}) from chest at {chest.TileLocation.X},{chest.TileLocation.Y}", LogLevel.Debug);
+            hand.Jobs.Enqueue(new HandJob { Kind = kind, Owner = hand.Name, Tile = tile, Via = chest.TileLocation, Item = item, Count = count });
+            Monitor.Log($"[maint] {hand.Name}: {kind} at {tile.X},{tile.Y} ({count} x {item}) from chest at {chest.TileLocation.X},{chest.TileLocation.Y}", LogLevel.Debug);
         }
     }
 
@@ -86,28 +117,54 @@ public partial class ModEntry
         j.Fetched = true;
         var chest = NearestChestWith(j.Item, j.Via ?? j.Tile);
         if (chest == null) return false;
-        j.Carry = TakeFromChest(chest, j.Item, j.Count);
+        j.Held = TakeFromChest(chest, Matcher(j.Item), j.Count);
+        j.Carry = j.Held.Sum(i => i.Stack);
+        j.Via = chest.TileLocation;
         return j.Carry > 0;
     }
 
-    /// <summary>At the machine: put the supplies in.</summary>
+    private void ReturnHeld(HandJob j)
+    {
+        if (j.Held.Count == 0) return;
+        var chest = j.Via.HasValue && Game1.getFarm().objects.TryGetValue(j.Via.Value, out var o) && o is Chest c ? c : FarmChests().FirstOrDefault();
+        foreach (var i in j.Held) chest?.addItem(i);
+        j.Held.Clear();
+    }
+
+    /// <summary>At the machine (or the chest, for eating): do the work.</summary>
     private void DoMaintenance(HandJob j)
     {
+        if (j.Kind == "eat") { Eat(j); return; }
         if (!j.Fetched && !FetchSupplies(j)) return;
         var farm = Game1.getFarm();
-        if (!farm.objects.TryGetValue(j.Tile, out var o) || !IsPowerObject(o)) return;
-        if (j.Kind == "refuel")
+        if (!farm.objects.TryGetValue(j.Tile, out var o)) { ReturnHeld(j); return; }
+        bool farmNow = Game1.currentLocation is StardewValley.Farm;
+        switch (j.Kind)
         {
-            SetD(o, FuelKey, Math.Min(MaxFuelHours, GetD(o, FuelKey) + j.Carry * HoursPerWood));
-            if (Game1.currentLocation is Farm) Game1.playSound("woodyStep");
-            Defenses.Add($"{j.Owner} refueled");
-        }
-        else
-        {
-            SetD(o, AmmoKey, Math.Min(MaxAmmo, GetD(o, AmmoKey) + j.Carry * AmmoPerOre));
-            if (actors.TryGetValue(j.Owner, out var a)) a.XpShooting++;
-            if (Game1.currentLocation is Farm) Game1.playSound("clank");
-            Defenses.Add($"{j.Owner} reloaded");
+            case "refuel" when IsPowerObject(o):
+                SetD(o, FuelKey, Math.Min(MaxFuelHours, GetD(o, FuelKey) + j.Carry * HoursPerWood));
+                if (farmNow) Game1.playSound("woodyStep");
+                Defenses.Add($"{j.Owner} refueled");
+                break;
+            case "reload" when IsPowerObject(o):
+                SetD(o, AmmoKey, Math.Min(MaxAmmo, GetD(o, AmmoKey) + j.Carry * AmmoPerOre));
+                if (actors.TryGetValue(j.Owner, out var a)) a.XpShooting++;
+                if (farmNow) Game1.playSound("clank");
+                Defenses.Add($"{j.Owner} reloaded");
+                break;
+            case "repair" when IsSandbag(o):
+                o.modData[HpKey] = SandbagHp.ToString();
+                if (farmNow) Game1.playSound("axchop");
+                Defenses.Add($"{j.Owner} repaired sandbags");
+                break;
+            case "cook" when IsPowerObject(o) && pNodes.TryGetValue(j.Tile, out var stove) && stove.Online:
+                var meal = ItemRegistry.Create("(O)" + PId("SimpleMeal"), 1);
+                var chest = j.Via.HasValue && farm.objects.TryGetValue(j.Via.Value, out var co) && co is Chest cc ? cc : FarmChests().FirstOrDefault();
+                if (chest != null && chest.addItem(meal) == null) { j.Held.Clear(); if (farmNow) Game1.playSound("dirtyHit"); Defenses.Add($"{j.Owner} cooked a meal"); }
+                break;
+            default:
+                ReturnHeld(j);   // the machine is gone or unpowered: put the ingredients back
+                break;
         }
         j.Carry = 0;
     }

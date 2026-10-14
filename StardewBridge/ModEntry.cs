@@ -14,6 +14,7 @@ public class SaveData
     public bool GateRecipes { get; set; }
     public string ResearchTarget { get; set; } = "";
     public long LastEarned { get; set; }
+    public Dictionary<string, double> Hunger { get; set; } = new(); // hand name -> 0 (full) .. 100 (starving)
     public Dictionary<string, int> Priorities { get; set; } = new(); // "name|task" -> 0..4
 }
 
@@ -112,6 +113,7 @@ public partial class ModEntry : Mod
     private void OnDayEnding()
     {
         FlushHands(); // finish any chores still in progress
+        SetTempEvent(0);
         SendHandXp();
         SendDayEnd();
         TrampleCrops(Game1.getFarm());
@@ -164,6 +166,7 @@ public partial class ModEntry : Mod
         TickSelfTest(e);
         TickGuns(e);
         TickPower(e);
+        TickFoodTemp((int)e.Ticks);
         TickHealth(e);
 
         if (!e.IsMultipleOf(30)) return;

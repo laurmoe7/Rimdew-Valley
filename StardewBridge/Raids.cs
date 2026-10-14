@@ -35,9 +35,13 @@ public partial class ModEntry
             case "ColdSnap":
             case "VolcanicWinter":
                 SetTomorrowWeather(Game1.weather_snow, $"{label}: snow is coming.");
+                SetTempEvent(-18);
+                break;
+            case "HeatWave":
+                SetTempEvent(15);
+                Hud($"{label}! It is {OutdoorTemp():0} C outside.", HUDMessage.error_type);
                 break;
             case "Eclipse":
-            case "HeatWave":
                 Hud($"{label}!", HUDMessage.error_type);
                 break;
             default:

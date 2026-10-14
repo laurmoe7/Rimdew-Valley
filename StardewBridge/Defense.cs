@@ -18,13 +18,14 @@ public partial class ModEntry
     private const string HpKey = "laurm.RimPower/hp", UsesKey = "laurm.RimPower/uses";
     private const int SandbagHp = 100, SpikeUses = 20;
 
-    private record DefItem(string Id, string Name, string Description, string Recipe, string Ingredients, int Count);
+    private record DefItem(string Id, string Name, string Description, string Recipe, string Ingredients, int Count, string Type = "Crafting", int Category = -9, int Edibility = -300, int Price = 0);
 
     private static readonly DefItem[] DefItems =
     {
         new("Sandbags",      "Sandbags",       "A barricade. Monsters chew through it (100 HP); bullets fly over it.", "Sandbags",       "771 8 330 2", 4),
         new("SpikeTrap",     "Spike Trap",     "Hurts monsters that walk over it. Wears out after 20 hits.",         "Spike Trap",     "335 1 388 6", 2),
         new("ExplosiveTrap", "Explosive Trap", "A one-shot blast when a monster steps on it.",                       "Explosive Trap", "286 1 335 1 382 1", 1),
+        new("SimpleMeal",    "Simple Meal",    "A plain cooked meal. Farmhands like it far better than raw crops.",          "", "", 1, "Cooking", -7, 40, 60),
     };
 
     private static bool IsSandbag(SObject? o) => o != null && !o.bigCraftable.Value && o.ItemId == PId("Sandbags");
@@ -45,8 +46,8 @@ public partial class ModEntry
                     var d = DefItems[i];
                     data[PId(d.Id)] = new ObjectData
                     {
-                        Name = PId(d.Id), DisplayName = d.Name, Description = d.Description, Type = "Crafting", Category = -9, Price = 0,
-                        Texture = DefenseSheetAsset, SpriteIndex = i, Edibility = -300,
+                        Name = PId(d.Id), DisplayName = d.Name, Description = d.Description, Type = d.Type, Category = d.Category, Price = d.Price,
+                        Texture = DefenseSheetAsset, SpriteIndex = i, Edibility = d.Edibility,
                         ExcludeFromShippingCollection = true, ExcludeFromRandomSale = true
                     };
                 }
@@ -57,7 +58,7 @@ public partial class ModEntry
             e.Edit(asset =>
             {
                 var data = asset.AsDictionary<string, string>().Data;
-                foreach (var d in DefItems) data[d.Recipe] = $"{d.Ingredients}/Home/{PId(d.Id)} {d.Count}/false/default/{d.Name}";
+                foreach (var d in DefItems.Where(d => d.Recipe != "")) data[d.Recipe] = $"{d.Ingredients}/Home/{PId(d.Id)} {d.Count}/false/default/{d.Name}";
             });
         }
         else if (e.NameWithoutLocale.IsEquivalentTo(DefenseSheetAsset))
@@ -89,6 +90,12 @@ public partial class ModEntry
         Rect(2, 5, 3, 6, 2, new Color(176, 50, 40)); Rect(2, 7, 1, 2, 2, new Color(60, 60, 60));
         Set(2, 8, 8, new Color(255, 80, 60)); Set(2, 7, 8, new Color(255, 80, 60));
 
+        // 3 simple meal: a plate with a stew mound and a sprig
+        var plate = new Color(236, 232, 224); var stew = new Color(196, 124, 60); var stewL = new Color(224, 164, 84);
+        Rect(3, 2, 9, 12, 5, plate); Rect(3, 3, 8, 10, 1, plate); Rect(3, 3, 14, 10, 1, new Color(170, 166, 160));
+        Rect(3, 4, 6, 8, 4, stew); Rect(3, 5, 5, 6, 1, stew); Rect(3, 5, 6, 3, 1, stewL);
+        Set(3, 10, 4, new Color(90, 170, 70)); Set(3, 11, 5, new Color(90, 170, 70)); Set(3, 6, 8, new Color(110, 60, 30)); Set(3, 9, 7, new Color(110, 60, 30));
+
         var dark = new Color(28, 24, 22);
         for (int cell = 0; cell < DefItems.Length; cell++)
         {
@@ -106,7 +113,7 @@ public partial class ModEntry
 
     internal void GiveDefenseKit()
     {
-        foreach (var d in DefItems)
+        foreach (var d in DefItems.Where(d => d.Recipe != ""))
             Game1.player.addItemByMenuIfNecessary(ItemRegistry.Create("(O)" + PId(d.Id), d.Id == "Sandbags" ? 20 : 5));
         Hud("Defense kit: 20 sandbags, 5 spike traps, 5 explosive traps.", HUDMessage.achievement_type);
     }
