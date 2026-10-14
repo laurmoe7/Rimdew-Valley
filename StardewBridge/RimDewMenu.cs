@@ -198,7 +198,10 @@ public partial class RimDewMenu : IClickableMenu
         {
             double mood = (double)info["mood"]!;
             Text(b, $"{moodPopup}: mood {mood:0.00} ({(string)info["status"]!})", x, y, big: true);
-            y += 56;
+            y += 40;
+            string traitLine = mod.TraitSummary(moodPopup);
+            Text(b, traitLine == "" ? "No traits" : "Traits: " + Fit(traitLine, 480), x, y, Color.DarkSlateBlue);
+            y += 36;
             var thoughts = info["thoughts"] as JArray ?? new JArray();
             if (thoughts.Count == 0) Text(b, "RimWorld reports no mood factors yet.", x, y, Color.Gray);
             foreach (var t in thoughts)

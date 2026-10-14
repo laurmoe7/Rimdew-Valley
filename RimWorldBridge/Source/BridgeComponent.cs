@@ -373,11 +373,46 @@ namespace RimDewBridge
                     { "name", kv.Key.Substring(5) }, { "mood", Math.Round(mood, 2) },
                     { "plants", p.skills.GetSkill(SkillDefOf.Plants).Level }, { "animals", p.skills.GetSkill(SkillDefOf.Animals).Level },
                     { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
-                    { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) },
+                    { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) }, { "traits", TraitList(p) },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
                 });
             }
             Send(new Dictionary<string, object> { { "type", "hands_info" }, { "hands", hands } });
+        }
+
+        // ---- traits ----
+        private static List<object> TraitList(Pawn p)
+        {
+            var list = new List<object>();
+            if (p.story == null) return list;
+            foreach (var t in p.story.traits.allTraits)
+                list.Add(new Dictionary<string, object> { { "id", t.def.defName }, { "degree", t.Degree }, { "label", t.LabelCap } });
+            return list;
+        }
+
+        private static int TraitDegree(Pawn p, string defName, int none = 0)
+        {
+            if (p.story == null) return none;
+            foreach (var t in p.story.traits.allTraits) if (t.def.defName == defName) return t.Degree;
+            return none;
+        }
+
+        private static bool HasTrait(Pawn p, string defName)
+        {
+            return p.story != null && p.story.traits.allTraits.Any(t => t.def.defName == defName);
+        }
+
+        /// <summary>Hard workers put in longer hours, the lazy shorter ones.</summary>
+        private static double WorkHoursFactor(Pawn p)
+        {
+            switch (TraitDegree(p, "Industriousness"))
+            {
+                case 2: return 1.35;
+                case 1: return 1.2;
+                case -1: return 0.8;
+                case -2: return 0.6;
+                default: return 1.0;
+            }
         }
 
         private Dictionary<string, object> WorkReport(Dictionary<string, object> backlog)
@@ -399,10 +434,11 @@ namespace RimDewBridge
                 int plants = p.skills.GetSkill(SkillDefOf.Plants).Level;
                 int animals = p.skills.GetSkill(SkillDefOf.Animals).Level;
                 bool able = !p.Downed && !p.InMentalState;
-                double hours = able ? 10.0 * (0.5 + mood) * Math.Max(0.1, p.health.capacities.GetLevel(PawnCapacityDefOf.Manipulation)) : 0;
+                double hours = able ? 10.0 * (0.5 + mood) * Math.Max(0.1, p.health.capacities.GetLevel(PawnCapacityDefOf.Manipulation)) * WorkHoursFactor(p) : 0;
+                double green = HasTrait(p, "SD_GreenThumb") ? 1.3 : 1.0;
                 var rate = new Dictionary<string, double>
                 {
-                    { "water", 6 + plants * 1.2 }, { "harvest", 4 + plants * 0.8 }, { "animals", 5 + animals * 1.0 }
+                    { "water", (6 + plants * 1.2) * green }, { "harvest", (4 + plants * 0.8) * green }, { "animals", 5 + animals * 1.0 }
                 };
                 var order = new[] { "water", "harvest", "animals" }
                     .Select((t, i) => new { t, pr = Prio(name, t, i + 1) })
@@ -420,7 +456,7 @@ namespace RimDewBridge
                 {
                     { "name", name }, { "mood", Math.Round(mood, 2) }, { "plants", plants }, { "animals", animals },
                     { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
-                    { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) },
+                    { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) }, { "traits", TraitList(p) },
                     { "hours", Math.Round(workedHours, 1) },
                     { "did_water", (int)mine["water"] }, { "did_harvest", (int)mine["harvest"] }, { "did_feed", (int)mine["animals"] },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }

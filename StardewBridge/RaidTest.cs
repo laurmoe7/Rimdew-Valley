@@ -60,6 +60,7 @@ public partial class ModEntry
         var player = Game1.player.Tile;
         try
         {
+            if (t == 200) Rt("TRAITS: " + string.Join(" | ", data.Hands.Select(n => $"{n}: [{TraitSummary(n)}] dmgFactor={TraitDamageFactor(n):0.00}")));
             if (t == 60 && Environment.GetEnvironmentVariable("RIMDEW_AIMTEST") == "1")
             {
                 GunBullet.Debug = m =>

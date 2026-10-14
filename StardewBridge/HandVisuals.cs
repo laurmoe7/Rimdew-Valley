@@ -244,6 +244,34 @@ public partial class ModEntry
     }
 
     /// <summary>Update mood/skills/status from a live report, keeping last night's chore counts and hours.</summary>
+    // ---------- traits (RimWorld pawn traits: id, degree, label) ----------
+    internal bool HasTrait(string hand, string id) => TraitDegree(hand, id) != int.MinValue;
+
+    internal int TraitDegree(string hand, string id)
+    {
+        var info = LastHands.FirstOrDefault(h => (string?)h["name"] == hand);
+        if (info?["traits"] is JArray ts)
+            foreach (var t in ts) if ((string?)t["id"] == id) return (int?)t["degree"] ?? 0;
+        return int.MinValue;
+    }
+
+    internal string TraitSummary(string hand)
+    {
+        var info = LastHands.FirstOrDefault(h => (string?)h["name"] == hand);
+        return info?["traits"] is JArray ts && ts.Count > 0 ? string.Join(", ", ts.Select(t => (string)t["label"]!)) : "";
+    }
+
+    /// <summary>Damage multiplier from a hand's traits: brawlers dislike guns, steady shooters are better, night owls shoot best after dark.</summary>
+    private double TraitDamageFactor(string hand)
+    {
+        double f = 1.0;
+        if (HasTrait(hand, "Brawler")) f *= 0.7;
+        int acc = TraitDegree(hand, "ShootingAccuracy");
+        if (acc == 1) f *= 1.15; else if (acc == -1) f *= 0.9;
+        if (HasTrait(hand, "NightOwl") && (Game1.timeOfDay >= 1800 || Game1.timeOfDay < 600)) f *= 1.15;
+        return f;
+    }
+
     private void MergeHandsInfo(JArray fresh)
     {
         foreach (var f in fresh)
@@ -251,7 +279,7 @@ public partial class ModEntry
             string name = (string)f["name"]!;
             var existing = LastHands.FirstOrDefault(h => (string?)h["name"] == name) as JObject;
             if (existing == null) { var copy = (JObject)f.DeepClone(); copy["hours"] = 0.0; LastHands.Add(copy); }
-            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status", "thoughts", "needs" }) existing[key] = f[key];
+            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status", "thoughts", "needs", "traits" }) existing[key] = f[key];
         }
         foreach (var gone in LastHands.Where(h => !data.Hands.Contains((string)h["name"]!)).ToList()) gone.Remove();
     }
@@ -395,7 +423,7 @@ public partial class ModEntry
             {
                 float ang = a.Aim + spread + (pellets > 1 ? (float)((Game1.random.NextDouble() - 0.5) * gun.Spread * 2) : 0f);
                 double mood = (double?)info?["mood"] ?? 0.5;
-                double moodFactor = mood < 0.3 ? 0.7 : 1.0;   // unhappy hands shoot at 70% damage
+                double moodFactor = (mood < 0.3 ? 0.7 : 1.0) * TraitDamageFactor(a.Name);   // unhappy hands shoot at 70% damage; traits adjust it
                 int dmg = (int)(Game1.random.Next(gun.MinDmg, gun.MaxDmg + 1) * (0.5 + skill * 0.07) * moodFactor);
                 SpawnBullet(Game1.getFarm(), gun, muzzle, ang, Math.Max(1, dmg), p == 0);
             }

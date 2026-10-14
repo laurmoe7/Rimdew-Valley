@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+  <TraitDef>
+    <defName>SD_GreenThumb</defName>
+    <commonality>0.6</commonality>
+    <degreeDatas>
+      <li>
+        <label>green thumb</label>
+        <description>{PAWN_nameDef} has a way with plants. Crops are watered and harvested faster.</description>
+        <commonality>1</commonality>
+      </li>
+    </degreeDatas>
+  </TraitDef>
+</Defs>
