@@ -91,7 +91,7 @@ public partial class ModEntry
     {
         if (!Context.IsWorldReady) return;
         SuppressSwing(e);
-        if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && Game1.currentLocation is Farm
+        if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && (Game1.currentLocation is Farm || InBunkInterior())
             && HandAt(e.Cursor.AbsolutePixels) != null)
         {
             Helper.Input.Suppress(e.Button);
