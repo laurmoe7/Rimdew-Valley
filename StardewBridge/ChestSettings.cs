@@ -78,16 +78,14 @@ public partial class ModEntry
         if (storagePanel == null || storagePanelMenu != menu)
         {
             int panelW = 400, margin = 16;
-            int free = Game1.uiViewport.Width - (menu.xPositionOnScreen + menu.width) - 120;   // room still unused on the right (keeps the side buttons on screen)
-            int need = panelW + margin * 2 - menu.xPositionOnScreen;
+            int chestX = menu.ItemsToGrabMenu.xPositionOnScreen;
+            int free = Game1.uiViewport.Width - (menu.xPositionOnScreen + menu.width) - 100;   // room left on the right (keeps the side buttons on screen)
+            int need = 340 + margin * 2 + 8 - chestX;                                          // push the chest right until a comfortable panel fits
             int shift = Math.Max(0, Math.Min(need, free));
             if (shift > 0) menu.movePosition(shift, 0);
-            // beside the chest if there is room on its left (the panel then fills that space, up to 400 wide); otherwise a collapsed tab that opens over the left of the screen
-            int space = menu.ItemsToGrabMenu.xPositionOnScreen - margin * 2 - 8;
-            bool fits = space >= 200;
-            Monitor.Log($"[storage panel] ui {Game1.uiViewport.Width}x{Game1.uiViewport.Height}, menu x={menu.xPositionOnScreen} w={menu.width}, chest area x={menu.ItemsToGrabMenu.xPositionOnScreen} w={menu.ItemsToGrabMenu.width}, shift={shift}, space={space}, fits={fits}", LogLevel.Alert);
-            int room = fits ? Math.Min(panelW, space) : Math.Min(panelW, Math.Max(260, Game1.uiViewport.Width * 45 / 100));
-            storagePanel = new StoragePanel(this, chest, new Rectangle(margin, 24, room, Game1.uiViewport.Height - 48), fits);
+            // always starts open, on the left: as wide as the space beside the chest allows (200 to 400); the "<" button collapses it to a tab
+            int room = Math.Clamp(chestX + shift - margin * 2 - 8, 200, panelW);
+            storagePanel = new StoragePanel(this, chest, new Rectangle(margin, 24, room, Game1.uiViewport.Height - 48), open: true);
             storagePanelMenu = menu;
         }
         storagePanel.Draw(e.SpriteBatch);
@@ -259,7 +257,7 @@ public partial class ModEntry
         private static void Label(SpriteBatch b, string text, Vector2 pos, int maxWidth, Color color)
         {
             var size = Game1.smallFont.MeasureString(text);
-            float scale = Math.Min(1f, Math.Max(40, maxWidth) / size.X);
+            float scale = Math.Clamp(Math.Max(40, maxWidth) / size.X, 0.7f, 1f);
             Utility.drawTextWithShadow(b, text, Game1.smallFont, pos, color, scale);
         }
     }

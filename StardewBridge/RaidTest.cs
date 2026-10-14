@@ -62,6 +62,12 @@ public partial class ModEntry
         var door = farm.GetMainFarmHouseEntry();
         try
         {
+            if (t == 100 && float.TryParse(Environment.GetEnvironmentVariable("RIMDEW_UISCALE"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var uiScale))
+            {
+                Game1.options.desiredUIScale = uiScale;
+                typeof(Game1).GetMethod("refreshWindowSettings", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.Invoke(Game1.game1, null);
+                Rt($"CHEST ui scale set to {uiScale}; ui viewport now {Game1.uiViewport.Width}x{Game1.uiViewport.Height}");
+            }
             if (t == 300)
             {
                 Game1.exitActiveMenu();
