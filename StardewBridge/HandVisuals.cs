@@ -19,6 +19,7 @@ public partial class ModEntry
     private class HandJob
     {
         public string Kind = "";           // water | harvest | animals
+        public string Owner = "";          // hand who does it (for skill XP)
         public Vector2 Tile;               // crop tile (water/harvest)
         public FarmAnimal? Animal;         // animals
     }
@@ -46,7 +47,8 @@ public partial class ModEntry
         public bool PathPartial;
         public int RepathTick;
         public Vector2 LastPos;
-        public int StuckTicks;     // currently indoors: not drawn, not clickable
+        public int StuckTicks;
+        public int XpPlants, XpAnimals, XpShooting;   // earned since the last night report     // currently indoors: not drawn, not clickable
         public float Aim;
         public Gun? Weapon;
         public int NextShot, LastShot = -100;
@@ -269,11 +271,11 @@ public partial class ModEntry
             int nWater = (int?)h["did_water"] ?? 0, nHarvest = (int?)h["did_harvest"] ?? 0, nFeed = (int?)h["did_feed"] ?? 0;
 
             foreach (var c in PickNearest(dry, nWater, actor.Pos, x => x.tile * 64f))
-            { actor.Jobs.Enqueue(new HandJob { Kind = "water", Tile = c.tile }); totalJobs++; }
+            { actor.Jobs.Enqueue(new HandJob { Kind = "water", Tile = c.tile, Owner = name }); totalJobs++; }
             foreach (var c in PickNearest(ready, nHarvest, actor.Pos, x => x.tile * 64f))
-            { actor.Jobs.Enqueue(new HandJob { Kind = "harvest", Tile = c.tile }); totalJobs++; }
+            { actor.Jobs.Enqueue(new HandJob { Kind = "harvest", Tile = c.tile, Owner = name }); totalJobs++; }
             foreach (var a in PickNearest(hungry, nFeed, actor.Pos, x => x.Position))
-            { actor.Jobs.Enqueue(new HandJob { Kind = "animals", Animal = a }); totalJobs++; }
+            { actor.Jobs.Enqueue(new HandJob { Kind = "animals", Animal = a, Owner = name }); totalJobs++; }
 
             Monitor.Log($"  {name}: {(string)h["status"]!}, mood {(double)h["mood"]!:0.00}, Plants {(int)h["plants"]!}, " +
                         $"Animals {(int)h["animals"]!}, chores {nWater}/{nHarvest}/{nFeed}", LogLevel.Info);
@@ -329,6 +331,7 @@ public partial class ModEntry
         {
             a.NextShot = (int)Game1.ticks + gun.Cooldown * 2 + Game1.random.Next(0, 12);
             a.LastShot = (int)Game1.ticks;
+            a.XpShooting++;
             int facing = a.Dir switch { 0 => 2, 1 => 1, 2 => 0, _ => 3 };
             var muzzle = HandPosFor(feet, facing, a.Dir is 1 or 3) + new Vector2((float)Math.Cos(a.Aim), (float)Math.Sin(a.Aim)) * 40f;
             PlayGunShot(gun, muzzle);
@@ -447,6 +450,33 @@ public partial class ModEntry
     private static Vector2 StandSpot(HandJob j) =>
         j.Kind == "animals" && j.Animal != null ? j.Animal.Position + new Vector2(0, 40) : j.Tile * 64f + new Vector2(0, 64);
 
+    /// <summary>Record skill XP for the hand who did a chore.</summary>
+    private void Credit(HandJob j, bool plants)
+    {
+        if (!actors.TryGetValue(j.Owner, out var o)) return;
+        if (plants) o.XpPlants++; else o.XpAnimals++;
+    }
+
+    /// <summary>Tell RimWorld what each hand practised since the last report, then reset the counters.</summary>
+    private void SendHandXp()
+    {
+        var list = new JArray();
+        foreach (var a in actors.Values)
+        {
+            if (a.XpPlants + a.XpAnimals + a.XpShooting == 0) continue;
+            list.Add(new JObject { ["name"] = a.Name, ["plants"] = a.XpPlants, ["animals"] = a.XpAnimals, ["shooting"] = a.XpShooting });
+            a.XpPlants = a.XpAnimals = a.XpShooting = 0;
+        }
+        if (list.Count > 0) Send(new JObject { ["type"] = "hand_xp", ["hands"] = list });
+    }
+
+    /// <summary>True if every hand has a bunk (4 per finished bunkhouse).</summary>
+    private bool HandsHoused()
+    {
+        int beds = Game1.getFarm().buildings.Count(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0) * BunkCapacity;
+        return data.Hands.Count <= beds;
+    }
+
     private void Perform(HandJob j)
     {
         var farm = Game1.getFarm();
@@ -458,6 +488,7 @@ public partial class ModEntry
                 {
                     dirt.state.Value = HoeDirt.watered;
                     doneWater++;
+                    Credit(j, true);
                     if (nearPlayer) Game1.playSound("slosh");
                 }
                 break;
@@ -465,6 +496,7 @@ public partial class ModEntry
                 if (farm.terrainFeatures.TryGetValue(j.Tile, out var tf2) && tf2 is HoeDirt h && h.readyForHarvest() && HarvestToBin(farm, h))
                 {
                     doneHarvest++;
+                    Credit(j, true);
                     if (nearPlayer) Game1.playSound("harvest");
                 }
                 break;
@@ -473,6 +505,7 @@ public partial class ModEntry
                 {
                     j.Animal.fullness.Value = 255;
                     doneFed++;
+                    Credit(j, false);
                 }
                 break;
         }

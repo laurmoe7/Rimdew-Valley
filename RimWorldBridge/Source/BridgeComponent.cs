@@ -103,6 +103,7 @@ namespace RimDewBridge
                 case "priority": handPriority[m.Str("name") + "|" + m.Str("task")] = (int)m.Num("value"); break;
                 case "research_set": researchTarget = m.Str("id"); break;
                 case "day_end": BeginDay(m); break;
+                case "hand_xp": HandXp(m); break;
                 // --- test tools (Stardew menu > Test tab) ---
                 case "report":
                     SendHandsInfo();
@@ -273,7 +274,11 @@ namespace RimDewBridge
                 if (p.needs.rest != null) p.needs.rest.CurLevel = Mathf.Max(p.needs.rest.CurLevel, 0.9f);
                 GainThought(p, "valley_life"); // offsets the gloom of standing on a bare map; see Thoughts_Stardew.xml
                 if ((kv.Key.StartsWith("npc:") || kv.Key == "farmer") && bad) GainThought(p, "bad_weather");
-                if (kv.Key.StartsWith("hand:")) GainThought(p, paid ? "paid" : "unpaid");
+                if (kv.Key.StartsWith("hand:"))
+                {
+                    GainThought(p, paid ? "paid" : "unpaid");
+                    GainThought(p, m.Bool("housed", true) ? "housed" : "unhoused");
+                }
             }
             ApplyResearch(m.Num("research_points"));
             ticksLeft = TicksPerDay;
@@ -298,6 +303,33 @@ namespace RimDewBridge
         }
 
         /// <summary>Hand status without running a night: mood, skills and whether they could work right now.</summary>
+        /// <summary>Skill XP earned by hands from Stardew work: Plants/Animals from chores, Shooting from raids.</summary>
+        private void HandXp(Dictionary<string, object> m)
+        {
+            foreach (var o in m.List("hands"))
+            {
+                var h = o.Obj();
+                var p = Get("hand:" + h.Str("name"));
+                if (p == null || p.skills == null) continue;
+                GrantXp(p, SkillDefOf.Plants, h.Num("plants") * 8f);
+                GrantXp(p, SkillDefOf.Animals, h.Num("animals") * 8f);
+                GrantXp(p, SkillDefOf.Shooting, h.Num("shooting") * 4f);
+            }
+        }
+
+        private void GrantXp(Pawn p, SkillDef def, double xp)
+        {
+            if (xp <= 0) return;
+            var rec = p.skills.GetSkill(def);
+            int before = rec.Level;
+            rec.Learn((float)xp, true);
+            if (rec.Level > before)
+                Send(new Dictionary<string, object>
+                {
+                    { "type", "hand_levelup" }, { "name", p.Name.ToStringShort }, { "skill", def.label }, { "level", rec.Level }
+                });
+        }
+
         private void SendHandsInfo()
         {
             var hands = new List<object>();

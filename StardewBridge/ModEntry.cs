@@ -96,6 +96,7 @@ public partial class ModEntry : Mod
     private void OnDayEnding()
     {
         FlushHands(); // finish any chores still in progress
+        SendHandXp();
         SendDayEnd();
         TrampleCrops(Game1.getFarm());
     }
@@ -116,6 +117,7 @@ public partial class ModEntry : Mod
             ["weather"] = CurrentWeather(),
             ["wealth"] = ComputeWealth(),
             ["wages_paid"] = paid,
+            ["housed"] = HandsHoused(),
             ["research_points"] = gained / 25,
             ["backlog"] = BuildBacklog(farm)
         });
@@ -174,6 +176,9 @@ public partial class ModEntry : Mod
             case "incident": OnIncident(msg); break;
             case "work_done": OnWorkDone(msg); break;
             case "hands_info": MergeHandsInfo((JArray)msg["hands"]!); break;
+            case "hand_levelup":
+                Hud($"{(string)msg["name"]!}'s {(string)msg["skill"]!} skill reached level {(int)msg["level"]!}!", HUDMessage.achievement_type);
+                break;
             case "research_state": OnResearchState(msg); break;
             case "research_unlocked": OnResearchUnlocked((string?)msg["id"] ?? ""); break;
             default: Monitor.Log($"Hub message: {msg}", LogLevel.Trace); break;
