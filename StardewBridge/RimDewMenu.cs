@@ -378,7 +378,7 @@ public partial class RimDewMenu : IClickableMenu
         var st = mod.StorageSummary();
         Text(b, $"Nutrient paste loaded: {st.paste}    Freezers: {(st.freezers == 0 ? "none" : st.freezers.ToString())}    Microwaves: {(st.microwaves == 0 ? "none" : st.microwaves.ToString())}", c.X, c.Y + 28);
         var hands = mod.Data.Hands;
-        if (hands.Count == 0) { Text(b, "No farmhands hired.", c.X, c.Y + 50, Color.Gray); return; }
+        if (hands.Count == 0) { Text(b, "No farmhands hired.", c.X, c.Y + 50, Color.Gray); DrawCaptives(b, c.Y + 90); return; }
         Text(b, "Hunger", c.X + 230, c.Y + 62, Color.Gray);
         Text(b, "Temperature", c.X + 520, c.Y + 62, Color.Gray);
         for (int i = 0; i < hands.Count; i++)
@@ -391,6 +391,23 @@ public partial class RimDewMenu : IClickableMenu
             Text(b, $"{hunger:0}", c.X + 460, ry);
             var (temp, status) = mod.HandClimate(nm);
             Text(b, $"{temp:0} C {(status == "" ? "" : "(" + status + ")")}", c.X + 520, ry, status == "" ? Game1.textColor : Color.Firebrick);
+        }
+        DrawCaptives(b, c.Y + 96 + hands.Count * 40 + 14);
+    }
+
+    /// <summary>Captured raiders, one per line (as many as fit under the hand list).</summary>
+    private void DrawCaptives(SpriteBatch b, int y)
+    {
+        var c = Content;
+        var caps = mod.Data.Captives;
+        if (y > c.Bottom - 30) return;
+        Text(b, caps.Count == 0 ? "Captives: none (downed raiders can be captured with right-click)" : $"Captives ({caps.Count})", c.X, y, caps.Count == 0 ? Color.Gray : Game1.textColor);
+        for (int i = 0; i < caps.Count; i++)
+        {
+            int ry = y + 32 + i * 30;
+            if (ry > c.Bottom - 30) { Text(b, $"... and {caps.Count - i} more", c.X + 20, Math.Min(ry, c.Bottom - 30), Color.Gray); break; }
+            var parts = caps[i].Split('|');
+            Text(b, "- " + parts[0] + (parts.Length > 1 ? $" (looks like {parts[1]})" : ""), c.X + 20, ry);
         }
     }
 

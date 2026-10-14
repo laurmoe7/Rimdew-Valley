@@ -47,6 +47,25 @@ public partial class ModEntry
         return string.Join(" | ", found);
     }
 
+    private bool colDone;
+    private int colStart = -1;
+
+    /// <summary>RIMDEW_COLTEST=1: show the Colony tab with a few captives and save a picture of the menu.</summary>
+    private void TickColonyTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_COLTEST") != "1" || colDone || !Context.IsWorldReady) return;
+        if (colStart < 0) colStart = (int)e.Ticks;
+        int t = (int)e.Ticks - colStart;
+        if (t == 150)
+        {
+            data.Captives.Clear();
+            foreach (var c in new[] { "Vex|Marlon", "Rook|Gus", "Mara|Pam" }) data.Captives.Add(c);
+            Game1.activeClickableMenu = new RimDewMenu(this, 2);
+        }
+        if (t == 200) MenuShot("colony_captives");
+        if (t == 230) { data.Captives.Clear(); Game1.exitActiveMenu(); Rt("COLONY done"); colDone = true; }
+    }
+
     private bool cabinDone;
     private int cabStart = -1;
 
@@ -214,6 +233,7 @@ public partial class ModEntry
         TickDineTest(e);
         TickHumanTest(e);
         TickCabinTest(e);
+        TickColonyTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;
