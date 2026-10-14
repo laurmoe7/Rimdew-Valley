@@ -108,3 +108,21 @@ internal static class TableMicrowaveDrawPatch
         return null;
     }
 }
+
+/// <summary>Placing the freezer chest made the game put a plain object (no storage) on the ground. Swap in a real Chest carrying the freezer's id.</summary>
+[HarmonyPatch(typeof(StardewValley.Object), nameof(StardewValley.Object.placementAction))]
+internal static class FreezerPlacePatch
+{
+    private static void Postfix(StardewValley.Object __instance, GameLocation location, int x, int y, ref bool __result)
+    {
+        if (!__result || __instance is not StardewValley.Objects.Chest held || held.ItemId != ModEntry.FreezerId) return;
+        var tile = new Microsoft.Xna.Framework.Vector2(x / 64, y / 64);
+        if (location.objects.TryGetValue(tile, out var placed) && placed is not StardewValley.Objects.Chest)
+        {
+            var chest = new StardewValley.Objects.Chest(true, tile, ModEntry.FreezerId);
+            foreach (var it in held.Items) chest.Items.Add(it);
+            foreach (var kv in placed.modData.Pairs) chest.modData[kv.Key] = kv.Value;
+            location.objects[tile] = chest;
+        }
+    }
+}

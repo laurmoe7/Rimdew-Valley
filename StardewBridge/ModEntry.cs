@@ -49,8 +49,8 @@ public partial class ModEntry : Mod
         helper.Events.Input.ButtonPressed += OnButtonPressed;
         helper.Events.World.BuildingListChanged += OnBuildingListChanged;
         helper.Events.GameLoop.UpdateTicked += (_, _) => TickFreeBuild();
-        helper.Events.GameLoop.DayStarted += (_, _) => AssignCabinLooks();
-        helper.Events.GameLoop.SaveLoaded += (_, _) => AssignCabinLooks();
+        helper.Events.GameLoop.DayStarted += (_, _) => { AssignCabinLooks(); ConvertFreezers(); };
+        helper.Events.GameLoop.SaveLoaded += (_, _) => { AssignCabinLooks(); ConvertFreezers(); };
         helper.Events.Display.MenuChanged += OnMenuChanged;
         helper.Events.Display.RenderedWorld += DrawHeldGun;
         helper.Events.Content.AssetRequested += OnAssetRequested;

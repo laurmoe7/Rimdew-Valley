@@ -58,6 +58,25 @@ public partial class ModEntry
         };
     }
 
+    /// <summary>Freezers placed before the placement fix are plain objects with no storage: turn each into a real chest.</summary>
+    internal void ConvertFreezers()
+    {
+        if (!Context.IsWorldReady) return;
+        var places = new List<GameLocation> { Game1.getFarm() };
+        places.AddRange(Game1.getFarm().buildings.Select(b => b.GetIndoors()).Where(l => l != null)!);
+        int n = 0;
+        foreach (var loc in places)
+            foreach (var (tile, o) in loc.objects.Pairs.ToList())
+                if (o.ItemId == FreezerId && o is not Chest)
+                {
+                    var chest = new Chest(true, tile, FreezerId);
+                    foreach (var kv in o.modData.Pairs) chest.modData[kv.Key] = kv.Value;
+                    loc.objects[tile] = chest;
+                    n++;
+                }
+        if (n > 0) Monitor.Log($"Converted {n} freezer(s) into real storage chests.", LogLevel.Info);
+    }
+
     internal static bool IsFreezer(Chest c) => c.ItemId == FreezerId;
 
     /// <summary>Ice cream is meant to be frozen; everything else tastes bad straight from the freezer.</summary>

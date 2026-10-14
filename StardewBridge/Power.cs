@@ -527,6 +527,7 @@ public partial class ModEntry
 
         if (pickup)
         {
+            if (o is StardewValley.Objects.Chest full && full.Items.Count > 0) { Hud("Empty it first: it still holds items.", HUDMessage.error_type); return; }
             Game1.currentLocation.objects.Remove(tile);
             var item = o.getOne();
             if (!Game1.player.addItemToInventoryBool(item)) Game1.createItemDebris(item, Game1.player.getStandingPosition(), 2);

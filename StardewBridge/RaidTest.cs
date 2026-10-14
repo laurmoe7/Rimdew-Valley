@@ -48,6 +48,57 @@ public partial class ModEntry
         return string.Join(" | ", found);
     }
 
+    private bool frzDone;
+    private int frzStart = -1;
+
+    /// <summary>RIMDEW_FRZTEST=1: craft/place a freezer like a player does, right-click it, and see whether a storage menu opens.</summary>
+    private void TickFreezerTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_FRZTEST") != "1" || frzDone || !Context.IsWorldReady) return;
+        if (frzStart < 0) frzStart = (int)e.Ticks;
+        int t = (int)e.Ticks - frzStart;
+        if (t == 20) Game1.warpFarmer("Farm", 76, 20, 2);
+        var farm = Game1.getFarm();
+        var door = farm.GetMainFarmHouseEntry();
+        var tile = new Vector2(door.X + 6, door.Y + 4);
+        try
+        {
+            if (t == 200)
+            {
+                // crafted the way the crafting page does
+                var recipe = new CraftingRecipe("Freezer");
+                var item = recipe.createItem();
+                Rt($"FRZ crafted item: {item.GetType().Name} id={item.QualifiedItemId} bigCraftable={(item as StardewValley.Object)?.bigCraftable.Value}");
+                farm.objects.Remove(tile);
+                var obj = (StardewValley.Object)item;
+                bool placed = obj.placementAction(farm, (int)tile.X * 64, (int)tile.Y * 64, Game1.player);
+                farm.objects.TryGetValue(tile, out var placedObj);
+                Rt($"FRZ placed={placed} object at tile: {placedObj?.GetType().Name} id={placedObj?.ItemId} isChest={placedObj is StardewValley.Objects.Chest}");
+                Game1.player.Position = new Vector2(tile.X * 64, (tile.Y + 2) * 64);
+            }
+            if (t == 240) Game1.exitActiveMenu();
+            if (t == 260 && farm.objects.TryGetValue(tile, out var o))
+            {
+                var plain = new StardewValley.Objects.Chest(true, tile + new Vector2(2, 0));
+                farm.objects[tile + new Vector2(2, 0)] = plain;
+                Game1.player.Position = new Vector2((tile.X + 1) * 64, (tile.Y + 2) * 64);
+                Game1.player.faceDirection(0);
+                var chest = o as StardewValley.Objects.Chest;
+                Rt($"FRZ freezer: loc={(chest?.Location?.Name ?? "NULL")} direct={chest?.checkForAction(Game1.player)}  plainChest: loc={(plain.Location?.Name ?? "NULL")} direct={plain.checkForAction(Game1.player)}");
+                Rt($"FRZ via location.checkAction: freezer={farm.checkAction(new xTile.Dimensions.Location((int)tile.X, (int)tile.Y), Game1.viewport, Game1.player)} plain={farm.checkAction(new xTile.Dimensions.Location((int)tile.X + 2, (int)tile.Y), Game1.viewport, Game1.player)}");
+            }
+            if (t == 340)
+            {
+                Rt($"FRZ menu after wait: {Game1.activeClickableMenu?.GetType().Name}");
+                Game1.exitActiveMenu();
+                // and the real input path: our button handler with a simulated right click is hard; log what the handler would do
+                if (farm.objects.TryGetValue(tile, out var o2)) Rt($"FRZ IsRimObject={IsRimObject(o2)} IsPowerObject={IsPowerObject(o2)} isChest={o2 is StardewValley.Objects.Chest}");
+                frzDone = true;
+            }
+        }
+        catch (Exception ex) { Rt("FRZ EXCEPTION: " + ex); frzDone = true; }
+    }
+
     private bool colDone;
     private int colStart = -1;
 
@@ -258,6 +309,7 @@ public partial class ModEntry
         TickHumanTest(e);
         TickCabinTest(e);
         TickColonyTest(e);
+        TickFreezerTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;
