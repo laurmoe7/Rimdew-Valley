@@ -332,10 +332,10 @@ public class RimDewMenu : IClickableMenu
             ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
                 ("Cheer everyone", () => mod.SendMoodEventToAll("festival", "birthday")), ("Upset everyone", () => mod.SendMoodEventToAll("gift_hated", "gift_hated")),
                 ("+200 research", () => mod.AddResearchPoints(200)) }),
-            ("Furniture (items go to your inventory; place them inside a bunkhouse)", new (string, Action)[] {
+            ("Furniture (items go to your inventory; place them inside a bunkhouse, or browse the free catalogue)", new (string, Action)[] {
                 ("Bed", () => mod.GiveFurniture("bed")), ("Double bed", () => mod.GiveFurniture("doublebed")), ("Chair", () => mod.GiveFurniture("chair")),
                 ("Table", () => mod.GiveFurniture("table")), ("Bookcase", () => mod.GiveFurniture("bookcase")), ("Lamp", () => mod.GiveFurniture("lamp")),
-                ("TV", () => mod.GiveFurniture("tv")), ("Furnish bunkhouse", mod.FurnishBunkhouse) }),
+                ("TV", () => mod.GiveFurniture("tv")), ("Free catalogue", mod.OpenFurnitureCatalogue) }),
             ("Storyteller (real incidents)", new (string, Action)[] { ("Raid", () => mod.FireRimWorldIncident("RaidEnemy")),
                 ("Infestation", () => mod.FireRimWorldIncident("Infestation")), ("Toxic fallout", () => mod.FireRimWorldIncident("ToxicFallout")),
                 ("Cold snap", () => mod.FireRimWorldIncident("ColdSnap")) }),

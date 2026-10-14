@@ -45,6 +45,7 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.DayEnding += (_, _) => OnDayEnding();
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
+        helper.Events.Display.MenuChanged += OnMenuChanged;
         helper.Events.Display.RenderedWorld += DrawHeldGun;
         helper.Events.Content.AssetRequested += OnAssetRequested;
         helper.Events.Input.ButtonsChanged += (_, _) => { if (Config.MenuKey.JustPressed()) { if (Game1.activeClickableMenu is RimDewMenu) Game1.exitActiveMenu(); else OpenMenu(); } };
@@ -52,6 +53,7 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.GameLaunched += (_, _) => DevDump();
         try { new HarmonyLib.Harmony(ModManifest.UniqueID).PatchAll(typeof(ModEntry).Assembly); }
         catch (Exception e) { Monitor.Log($"Could not patch Farmer.IsCarrying (guns may show a carry pose): {e.Message}", LogLevel.Warn); }
+        InitSelfTest();
         RegisterCommands();
     }
 
@@ -155,6 +157,7 @@ public partial class ModEntry : Mod
 
         TickVillagers(e);
         TickHands();
+        TickSelfTest(e);
         TickGuns(e);
         TickHealth(e);
 

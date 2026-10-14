@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Newtonsoft.Json.Linq;
 using StardewModdingAPI;
+using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.TerrainFeatures;
 
@@ -176,35 +177,56 @@ public partial class ModEntry
     }
 
     /// <summary>Stand inside a bunkhouse and click: places 2 beds, a chair, table, bookcase and lamp wherever they fit.</summary>
-    internal void FurnishBunkhouse()
-    {
-        var loc = Game1.currentLocation;
-        bool inBunk = loc != null && Game1.getFarm().buildings.Any(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.GetIndoors() == loc);
-        if (!inBunk) { Hud("Walk into a bunkhouse first, then press this.", HUDMessage.error_type); return; }
+    private bool catalogueOpen;
+    private int savedMoney;
 
-        int exitY = loc!.warps.FirstOrDefault()?.Y ?? loc.map.Layers[0].LayerHeight - 1;
+    /// <summary>Open the game's furniture catalogue shop for free: gold is topped up while it is open and restored when it closes.</summary>
+    internal void OpenFurnitureCatalogue()
+    {
+        if (!Context.IsPlayerFree) { Hud("Close other menus first.", HUDMessage.error_type); return; }
+        var shops = Game1.content.Load<Dictionary<string, StardewValley.GameData.Shops.ShopData>>("Data/Shops");
+        string? shopId = new[] { "Furniture Catalogue", "Catalogue" }.FirstOrDefault(shops.ContainsKey);
+        if (shopId == null) { Hud("Couldn't find the furniture catalogue shop in this game version.", HUDMessage.error_type); return; }
+
+        savedMoney = Game1.player.Money;
+        Game1.player.Money = 99_999_999;
+        if (Utility.TryOpenShopMenu(shopId, (string?)null)) catalogueOpen = true;
+        else { Game1.player.Money = savedMoney; Hud("The catalogue wouldn't open.", HUDMessage.error_type); }
+    }
+
+    private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
+    {
+        if (catalogueOpen && e.OldMenu is StardewValley.Menus.ShopMenu && e.NewMenu is not StardewValley.Menus.ShopMenu)
+        {
+            // Everything bought was free: put the player's real gold back.
+            Game1.player.Money = savedMoney;
+            catalogueOpen = false;
+            Hud("Catalogue closed. Your gold is unchanged.", HUDMessage.achievement_type);
+        }
+    }
+
+    /// <summary>Place 2 beds, a chair, table, bookcase and lamp wherever they fit (clear of the entrance). Returns how many were placed.</summary>
+    internal int FurnishLocation(GameLocation loc)
+    {
+        int exitY = loc.warps.FirstOrDefault()?.Y ?? loc.map.Layers[0].LayerHeight - 1;
         int w = loc.map.Layers[0].LayerWidth;
         int placed = 0;
         foreach (var kind in new[] { "bed", "bed", "chair", "table", "bookcase", "lamp" })
         {
             string? id = FurnitureIdFor(kind);
             if (id == null) continue;
-            for (int y = 2; y <= exitY - 3 && placed >= 0; y++)
-            {
-                bool done = false;
+            bool done = false;
+            for (int y = 2; y <= exitY - 3 && !done; y++)
                 for (int x = 1; x < w - 1 && !done; x++)
                 {
                     var f = ItemRegistry.Create("(F)" + id, 1, allowNull: true) as StardewValley.Objects.Furniture;
                     if (f == null) break;
-                    var tile = new Vector2(x, y);
-                    if (!f.canBePlacedHere(loc, tile)) continue;
+                    if (!f.canBePlacedHere(loc, new Vector2(x, y))) continue;
                     if (f.placementAction(loc, x * 64, y * 64, Game1.player)) { placed++; done = true; }
                 }
-                if (done) break;
-            }
         }
         walkCache.Clear();
-        Hud($"Furnished the bunkhouse with {placed} pieces.", HUDMessage.achievement_type);
+        return placed;
     }
 
     internal void GrowAllCrops()

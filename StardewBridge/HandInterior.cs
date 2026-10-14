@@ -51,7 +51,8 @@ public partial class ModEntry
         a.AtUse = false;
         a.UseTarget = null;
         ResetPath(a);
-        a.Pos = (a.Door ?? a.Home) + new Vector2(0, 8);
+        int slotIdx = Math.Max(0, data.Hands.IndexOf(a.Name)) % BunkCapacity;
+        a.Pos = (a.Door ?? a.Home) + new Vector2((slotIdx - 1.5f) * 26, 8);
         a.Dir = 0;
         a.Moving = false;
     }
@@ -74,10 +75,21 @@ public partial class ModEntry
         return Math.Abs(d.X) > Math.Abs(d.Y) ? (d.X > 0 ? 1 : 3) : (d.Y > 0 ? 0 : 2);
     }
 
+    /// <summary>How many hands can use this piece at once: single bed 1, double bed 2, seating one per seat, anything else 2.</summary>
+    private static int UseCapacity(Furniture f)
+    {
+        if (f is BedFurniture bed) return bed.bedType == BedFurniture.BedType.Double ? 2 : 1;
+        int seats = f.GetSeatPositions().Count;
+        return seats > 0 ? seats : 2;
+    }
+
+    private int UsersOf(Furniture f, HandActor except) =>
+        actors.Values.Count(o => o != except && o.Inside && o.UseTarget == f);
+
     /// <summary>Choose a piece of furniture and where to stand to use it.</summary>
     private void PickIdleUse(HandActor a, GameLocation loc)
     {
-        var usable = loc.furniture.Where(IsUsable).ToList();
+        var usable = loc.furniture.Where(f => IsUsable(f) && UsersOf(f, a) < UseCapacity(f)).ToList();   // skip anything already full
         if (usable.Count == 0) { a.NextIdlePick = (int)Game1.ticks + 600; return; }
         var f = usable[Game1.random.Next(usable.Count)];
 
@@ -86,7 +98,9 @@ public partial class ModEntry
         var seats = f is BedFurniture ? new List<Vector2>() : f.GetSeatPositions();
         if (seats.Count > 0)
         {
-            var s = seats[Game1.random.Next(seats.Count)];
+            var free = seats.Where(s => !actors.Values.Any(o => o != a && o.Inside && o.UseTarget == f && ToTile(o.UseSpot) == new Point((int)s.X, (int)s.Y))).ToList();
+            if (free.Count == 0) { a.NextIdlePick = (int)Game1.ticks + 300; return; }
+            var s = free[Game1.random.Next(free.Count)];
             spot = new Point((int)s.X, (int)s.Y);          // sit on the seat itself
         }
         else

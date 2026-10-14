@@ -345,7 +345,11 @@ public partial class ModEntry
         else
         {
             // No clear shot: walk (around terrain) toward the monster until there is one.
-            StepTo(a, new Vector2(monsterTile.X * 64, monsterTile.Y * 64), HandSpeed * 1.2f, allowPartial: true);
+            // Each hand aims for its own tile around the target (when that tile is open ground), so a group fans out.
+            var offsets = new[] { new Point(-2, -1), new Point(2, -1), new Point(0, 2), new Point(-3, 1), new Point(3, 1) };
+            var goalTile = new Point(monsterTile.X + offsets[slot].X, monsterTile.Y + offsets[slot].Y);
+            if (!Walkable(goalTile)) goalTile = monsterTile;
+            StepTo(a, new Vector2(goalTile.X * 64, goalTile.Y * 64), HandSpeed * 1.2f, allowPartial: true);
         }
 
         // No progress for ~1.5s while out of position: log why, rescue the hand, and if still stuck shoot from here.

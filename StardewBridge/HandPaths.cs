@@ -90,14 +90,21 @@ public partial class ModEntry
     private bool StepTo(HandActor a, Vector2 goalPx, float speed, bool allowPartial = false)
     {
         var goalTile = ToTile(goalPx);
-        if (goalTile != a.PathGoal && Game1.ticks >= a.RepathTick)
+        // Re-route only when needed: no route yet, the target moved more than 3 tiles, or the route is used up and we are not there.
+        // (Re-routing every time a monster hops one tile restarted the walk constantly and made hands crawl.)
+        bool goalChanged = goalTile != a.PathGoal;
+        bool movedFar = goalChanged && (a.PathGoal == NoGoal || Math.Abs(goalTile.X - a.PathGoal.X) + Math.Abs(goalTile.Y - a.PathGoal.Y) > 3);
+        bool routeUsedUp = goalChanged && a.Path != null && a.PathIdx >= a.Path.Count;
+        if ((movedFar || routeUsedUp) && Game1.ticks >= a.RepathTick)
         {
             a.Path = FindPath(ToTile(a.Pos), goalTile, allowPartial, out bool partial, LocOf(a));
             a.PathPartial = partial;
             a.PathGoal = goalTile;
             a.PathIdx = 0;
             a.Unreachable = a.Path == null;
-            if (a.Path == null) a.RepathTick = (int)Game1.ticks + 45;   // don't search again every frame
+            a.RepathTick = (int)Game1.ticks + (a.Path == null ? 45 : 20);   // throttle searches
+            // The first waypoint may be behind us if we are already past our own tile's centre.
+            if (a.Path != null && a.Path.Count >= 2 && Vector2.Distance(a.Pos, a.Path[1]) < Vector2.Distance(a.Path[0], a.Path[1])) a.PathIdx = 1;
         }
         if (a.Unreachable) { a.Moving = false; return false; }
 
@@ -147,6 +154,7 @@ public partial class ModEntry
 
     private void LogStuck(HandActor a, Point monsterTile, float dist)
     {
+        stuckLogs++;
         var t = ToTile(a.Pos);
         string W(Point p) => Walkable(p) ? "open" : "blocked";
         Monitor.Log($"[stuck] {a.Name} at tile {t.X},{t.Y} ({W(t)}); neighbours N {W(new Point(t.X, t.Y - 1))}, E {W(new Point(t.X + 1, t.Y))}, " +
