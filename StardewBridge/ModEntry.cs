@@ -54,7 +54,10 @@ public partial class ModEntry : Mod
         try { new HarmonyLib.Harmony(ModManifest.UniqueID).PatchAll(typeof(ModEntry).Assembly); }
         catch (Exception e) { Monitor.Log($"Could not patch Farmer.IsCarrying (guns may show a carry pose): {e.Message}", LogLevel.Warn); }
         InitSelfTest();
+        InitPower();
+        InitDevAutoload();
         RegisterCommands();
+        RegisterPowerCommands();
     }
 
     private void Send(JObject msg) => hub.Send(msg);
@@ -159,6 +162,7 @@ public partial class ModEntry : Mod
         TickHands();
         TickSelfTest(e);
         TickGuns(e);
+        TickPower(e);
         TickHealth(e);
 
         if (!e.IsMultipleOf(30)) return;

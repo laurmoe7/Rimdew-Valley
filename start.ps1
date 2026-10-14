@@ -1,3 +1,7 @@
+param(
+    [string]$Autoload = "",     # dev: save folder to load straight from the title screen, e.g. Rimdew_451598802
+    [string]$Test = ""          # dev: "power" runs the power/turret test scenario after loading
+)
 Start-Transcript -Path "$PSScriptRoot\launcher.log" -Force | Out-Null
 # Starts the RimDew stack: relay hub, RimWorld (hidden sim), then Stardew via SMAPI.
 $root = $PSScriptRoot
@@ -38,6 +42,9 @@ $rw = Get-Process RimWorldWin64 -ErrorAction SilentlyContinue | Select-Object -F
 if ($rw) { [Win]::ShowWindow($rw.MainWindowHandle, 6) | Out-Null }   # 6 = minimize
 
 # 4. Stardew through SMAPI, brought to the front
+$modDir = "$stardew\Mods\StardewBridge"
+if ($Autoload) { Set-Content -Path "$modDir\dev_autoload.txt" -Value $Autoload -NoNewline }
+if ($Test -eq "power") { New-Item -ItemType File -Force -Path "$modDir\dev_powertest.flag" | Out-Null }
 if (-not (Get-Process "StardewModdingAPI" -ErrorAction SilentlyContinue)) {
     Start-Process "$stardew\StardewModdingAPI.exe" -WorkingDirectory $stardew
     Write-Host "Launching Stardew via SMAPI."

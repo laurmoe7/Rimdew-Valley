@@ -79,4 +79,37 @@
     <researchViewX>3</researchViewX>
     <researchViewY>0</researchViewY>
   </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_Electricity</defName>
+    <label>electricity</label>
+    <description>Power poles, wood generators and batteries.</description>
+    <baseCost>500</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>3</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_SolarPower</defName>
+    <label>solar power</label>
+    <description>Photovoltaic panels.</description>
+    <baseCost>700</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>4</researchViewX>
+    <researchViewY>0</researchViewY>
+  </ResearchProjectDef>
+
+  <ResearchProjectDef>
+    <defName>SD_MiniTurret</defName>
+    <label>mini-turrets</label>
+    <description>Automatic gun turrets that defend the valley.</description>
+    <baseCost>800</baseCost>
+    <techLevel>Industrial</techLevel>
+    <tab>Main</tab>
+    <researchViewX>3</researchViewX>
+    <researchViewY>1</researchViewY>
+  </ResearchProjectDef>
 </Defs>

@@ -9,15 +9,18 @@ namespace StardewBridge;
 public partial class ModEntry
 {
     // RimWorld project id -> Stardew crafting recipe name
-    private static readonly Dictionary<string, string> RecipeFor = new()
+    private static readonly Dictionary<string, string[]> RecipeFor = new()
     {
-        ["Keg"] = "Keg",
-        ["PreservesJar"] = "Preserves Jar",
-        ["Loom"] = "Loom",
-        ["CheesePress"] = "Cheese Press",
-        ["MayonnaiseMachine"] = "Mayonnaise Machine",
-        ["OilMaker"] = "Oil Maker",
-        ["Furnace"] = "Furnace"
+        ["Keg"] = new[] { "Keg" },
+        ["PreservesJar"] = new[] { "Preserves Jar" },
+        ["Loom"] = new[] { "Loom" },
+        ["CheesePress"] = new[] { "Cheese Press" },
+        ["MayonnaiseMachine"] = new[] { "Mayonnaise Machine" },
+        ["OilMaker"] = new[] { "Oil Maker" },
+        ["Furnace"] = new[] { "Furnace" },
+        ["Electricity"] = new[] { "Power Pole", "Wood Generator", "Battery" },
+        ["SolarPower"] = new[] { "Solar Panel" },
+        ["MiniTurret"] = new[] { "Mini-Turret" }
     };
 
     internal JArray lastProjects = new();
@@ -42,17 +45,18 @@ public partial class ModEntry
     {
         if (!Context.IsWorldReady) return;
         var recipes = Game1.player.craftingRecipes;
-        foreach (var (id, recipe) in RecipeFor)
-        {
-            bool allowed = !data.GateRecipes || data.Researched.Contains(id);
-            if (!allowed && recipes.ContainsKey(recipe))
+        foreach (var (id, names) in RecipeFor)
+            foreach (var recipe in names)
             {
-                recipes.Remove(recipe);
-                data.GatedRemoved.Add(recipe);
+                bool allowed = !data.GateRecipes || data.Researched.Contains(id);
+                if (!allowed && recipes.ContainsKey(recipe))
+                {
+                    recipes.Remove(recipe);
+                    data.GatedRemoved.Add(recipe);
+                }
+                else if (allowed && (data.GatedRemoved.Remove(recipe) || PowerRecipeNames.Contains(recipe)))
+                    recipes.TryAdd(recipe, 0);
             }
-            else if (allowed && data.GatedRemoved.Remove(recipe))
-                recipes.TryAdd(recipe, 0);
-        }
     }
 
     private void PrintResearch()

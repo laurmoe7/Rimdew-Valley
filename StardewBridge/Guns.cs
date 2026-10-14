@@ -6,6 +6,7 @@ using StardewValley;
 using StardewValley.GameData.Buildings;
 using StardewValley.GameData.Objects;
 using StardewValley.GameData.Weapons;
+using StardewValley.Monsters;
 using StardewValley.Projectiles;
 
 namespace StardewBridge;
@@ -46,6 +47,7 @@ public partial class ModEntry
     // ---------- content: item definitions + inventory icons ----------
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
     {
+        PowerAssets(e);
         if (e.NameWithoutLocale.IsEquivalentTo("Data/Buildings"))
         {
             e.Edit(asset =>
@@ -274,6 +276,12 @@ public partial class ModEntry
             this.sprite = sprite;
             this.length = length;
         }
+
+        internal static Action<string>? Debug;
+        public override void behaviorOnCollisionWithOther(GameLocation location) { Debug?.Invoke($"hit OTHER at {position.X / 64:0.00},{position.Y / 64:0.00}"); base.behaviorOnCollisionWithOther(location); }
+        public override void behaviorOnCollisionWithTerrainFeature(StardewValley.TerrainFeatures.TerrainFeature t, Vector2 tileLocation, GameLocation location) { Debug?.Invoke($"hit TERRAIN {t.GetType().Name} at {tileLocation}"); base.behaviorOnCollisionWithTerrainFeature(t, tileLocation, location); }
+        public override void behaviorOnCollisionWithMonster(StardewValley.NPC n, GameLocation location) { Debug?.Invoke($"hit MONSTER {n.Name} hp={(n as Monster)?.Health}"); base.behaviorOnCollisionWithMonster(n, location); Debug?.Invoke($"  -> hp={(n as Monster)?.Health}"); }
+        public override void behaviorOnCollisionWithPlayer(GameLocation location, Farmer player) { Debug?.Invoke("hit PLAYER"); base.behaviorOnCollisionWithPlayer(location, player); }
 
         public override void draw(SpriteBatch b)
         {
