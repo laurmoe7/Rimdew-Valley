@@ -453,7 +453,7 @@ public partial class ModEntry
     {
         var farm = Game1.getFarm();
         if (Game1.currentLocation != farm) return;   // projectiles only fly while the player is in the same location
-        var monsters = farm.characters.OfType<Monster>().Where(m => m.Health > 0 && !m.IsInvisible).ToList();
+        var monsters = farm.characters.OfType<Monster>().Where(m => IsTarget(m) && !m.IsInvisible).ToList();
         float range = TurretRangeTiles * 64f;
         foreach (var n in pNodes.Values)
         {

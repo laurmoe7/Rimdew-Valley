@@ -207,7 +207,7 @@ namespace RimDewBridge
         {
             var p = Get("farmer");
             if (p == null || p.Dead || amount <= 0) return;
-            DamageDef d = kind == "blunt" ? DamageDefOf.Blunt : kind == "bite" ? DamageDefOf.Bite
+            DamageDef d = kind == "blunt" ? DamageDefOf.Blunt : kind == "bite" ? DamageDefOf.Bite : kind == "bullet" ? DamageDefOf.Bullet
                         : kind == "burn" ? DamageDefOf.Flame : DamageDefOf.Cut;
             p.TakeDamage(new DamageInfo(d, (float)(amount * 0.6), 0f, -1f));
             SendHealth();

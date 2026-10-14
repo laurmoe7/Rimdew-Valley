@@ -38,6 +38,7 @@ public partial class ModEntry
             .OrderBy(x => Vector2Distance(x.Tile, Game1.player.Tile)).FirstOrDefault();
         if (m == null) return "blunt";
         if (m is GreenSlime) return "blunt";
+        if (m is HumanRaider { Ranged: true }) return "bullet";
         if (m is Bat) return "bite";
         return "cut";
     }

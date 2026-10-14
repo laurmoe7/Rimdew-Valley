@@ -47,6 +47,82 @@ public partial class ModEntry
         return string.Join(" | ", found);
     }
 
+    private bool cabinDone;
+    private int cabStart = -1;
+
+    /// <summary>RIMDEW_CABINTEST=1: build three free bunkhouses; each should switch to a cabin look.</summary>
+    private void TickCabinTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_CABINTEST") != "1" || cabinDone || !Context.IsWorldReady) return;
+        if (cabStart < 0) { cabStart = (int)e.Ticks; Rt("CABIN world ready"); }
+        int t = (int)e.Ticks - cabStart - 90;
+        if (t == -80) Game1.warpFarmer("Farm", 76, 20, 2);
+        if (t < 0) return;
+        var farm = Game1.getFarm();
+        var door = farm.GetMainFarmHouseEntry();
+        try
+        {
+            if (t == 30)
+            {
+                int built = 0;
+                for (int ty = 6; ty < 70 && built < 3; ty += 2)
+                    for (int tx = 6; tx < 72 && built < 3; tx += 2)
+                    {
+                        if (farm.buildings.Any(o => Math.Abs(o.tileX.Value - tx) < 9 && Math.Abs(o.tileY.Value - ty) < 6)) continue;
+                        if (farm.buildStructure(BunkFreeId, new Vector2(tx, ty), Game1.player, out var b, magicalConstruction: true))
+                        { b.daysOfConstructionLeft.Value = 0; built++; Rt($"CABIN built at {tx},{ty}"); }
+                    }
+            }
+            if (t == 200)
+            {
+                foreach (var b in farm.buildings.Where(IsBunk))
+                    Rt($"CABIN type={b.buildingType.Value} skin={b.skinId.Value ?? "default"} size={b.tilesWide.Value}x{b.tilesHigh.Value} door={b.humanDoor.Value} at {b.tileX.Value},{b.tileY.Value} indoors={b.GetIndoors()?.GetType().Name}");
+                var first = farm.buildings.FirstOrDefault(IsBunk);
+                if (first != null) Game1.player.Position = new Vector2((first.tileX.Value + 2) * 64, (first.tileY.Value + first.tilesHigh.Value + 3) * 64);
+            }
+            if (t == 900) { Rt("CABIN done"); cabinDone = true; }
+        }
+        catch (Exception ex) { Rt("CABIN EXCEPTION: " + ex); cabinDone = true; }
+    }
+
+    private bool humanDone;
+    private int htStart = -1;
+
+    /// <summary>RIMDEW_HUMANTEST=1: human raiders arrive, hands shoot them down, they stop being targets, and a downed one can be captured.</summary>
+    private void TickHumanTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_HUMANTEST") != "1" || humanDone || !Context.IsWorldReady) return;
+        if (htStart < 0) { htStart = (int)e.Ticks; Rt("HUMAN world ready"); }
+        int t = (int)e.Ticks - htStart - 90;
+        if (t == -80) Game1.warpFarmer("Farm", 76, 20, 2);
+        if (t < 0) return;
+        var farm = Game1.getFarm();
+        try
+        {
+            if (t == 60)
+            {
+                SpawnMonsters(4, "human");
+                Rt($"HUMAN spawned: {farm.characters.OfType<HumanRaider>().Count()} raiders: " +
+                   string.Join(", ", farm.characters.OfType<HumanRaider>().Select(r => $"{r.RaiderName}/{r.Look}/hp{r.Health}/{(r.Ranged ? "gun" : "melee")}")));
+            }
+            if (t >= 60 && t % 180 == 0 && t < 3000)
+            {
+                var hs = farm.characters.OfType<HumanRaider>().ToList();
+                Rt($"HUMAN t={t} alive={hs.Count(r => !r.Downed)} downed={hs.Count(r => r.Downed)} playerHp={Game1.player.health} calm={Calm()} hands=[{string.Join(", ", actors.Values.Select(a => a.Name + ":" + a.Activity))}]");
+            }
+            if (t == 3000)
+            {
+                var hs = farm.characters.OfType<HumanRaider>().ToList();
+                var down = hs.FirstOrDefault(r => r.Downed);
+                if (down != null) CaptureRaider(farm, down);
+                Rt($"HUMAN RESULT downed={hs.Count(r => r.Downed)} (before capture) captives={data.Captives.Count} [{string.Join(", ", data.Captives)}] stillOnFarm={farm.characters.OfType<HumanRaider>().Count()} defenses=[{string.Join("; ", Defenses.Distinct().TakeLast(6))}]");
+                farm.characters.RemoveWhere(c => c is Monster);
+                humanDone = true;
+            }
+        }
+        catch (Exception ex) { Rt("HUMAN EXCEPTION: " + ex); humanDone = true; }
+    }
+
     private bool dineDone;
     private int dtStart = -1;
 
@@ -109,7 +185,7 @@ public partial class ModEntry
                 foreach (var n in data.Hands) data.Hunger[n] = 85;
                 Rt($"DINE chest at {chestTile}; hunger 85; hands={string.Join(",", data.Hands)}");
             }
-            if (t >= 60 && t % 150 == 0 && t < 260)
+            if (t >= 60 && t % 150 == 0 && t < 3000)
                 Rt($"DINE t={t} " + string.Join(" | ", actors.Values.Select(a => $"{a.Name}[{(a.Inside ? "in" : "out")} {ToTile(a.Pos).X},{ToTile(a.Pos).Y} {a.Activity} meal={(a.Meal != null || a.MealPaste)} dining={a.Dining} hunger={HungerOf(a.Name):0}]")) +
                        $" defenses=[{string.Join("; ", Defenses.Distinct().TakeLast(4))}]");
             if (t == 40 && Environment.GetEnvironmentVariable("RIMDEW_NOTABLE") != "1")
@@ -125,7 +201,7 @@ public partial class ModEntry
                 Game1.player.Position = new Vector2((tile.X + 1) * 64, (tile.Y + 3) * 64); Game1.xLocationAfterWarp = 0;
             }
             
-            if (t == 600) { Rt("DINE done"); dineDone = true; }
+            if (t == 3000) { Rt("DINE done"); dineDone = true; }
         }
         catch (Exception ex) { Rt("DINE EXCEPTION: " + ex); dineDone = true; }
     }
@@ -136,6 +212,8 @@ public partial class ModEntry
     private void TickRaidTest(UpdateTickedEventArgs e)
     {
         TickDineTest(e);
+        TickHumanTest(e);
+        TickCabinTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;

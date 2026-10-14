@@ -98,6 +98,7 @@ public partial class ModEntry
             Game1.activeClickableMenu = new RimDewMenu(this, 1);
             return;
         }
+        if (e.Button.IsActionButton() && Game1.activeClickableMenu == null && TryCaptureRaider(e)) return;
         if (!e.Button.IsActionButton() || npcBroken.Count == 0) return;
         var npc = Game1.currentLocation.isCharacterAtTile(e.Cursor.GrabTile) as NPC
                   ?? Game1.currentLocation.isCharacterAtTile(e.Cursor.Tile) as NPC;

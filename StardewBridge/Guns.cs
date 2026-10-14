@@ -44,6 +44,21 @@ public partial class ModEntry
     private bool leftWasDown;
     private int lastShotTick = -100;
 
+    internal static bool IsBunk(StardewValley.Buildings.Building b) => b.buildingType.Value.StartsWith(BunkId);
+
+    /// <summary>Give <paramref name="to"/> the outside of <paramref name="from"/> (picture, footprint, doors) but keep its own interior.</summary>
+    private static void CopyLook(BuildingData from, BuildingData to)
+    {
+        foreach (var name in new[] { "Texture", "Skins", "SeasonOffset", "DrawOffset", "SortTileOffset", "DrawShadow", "DrawLayers", "CollisionMap",
+                                     "AdditionalPlacementTiles", "Size", "HumanDoor", "AnimalDoor", "FadeWhenPlayerIsBehind", "SourceRect", "UpgradeSignTile", "UpgradeSignHeight" })
+        {
+            var field = typeof(BuildingData).GetField(name);
+            if (field != null) { field.SetValue(to, field.GetValue(from)); continue; }
+            var prop = typeof(BuildingData).GetProperty(name);
+            if (prop != null && prop.CanWrite) prop.SetValue(to, prop.GetValue(from));
+        }
+    }
+
     // ---------- content: item definitions + inventory icons ----------
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
     {
@@ -76,6 +91,14 @@ public partial class ModEntry
                 free.BuildDays = 0;
                 free.BuildMaterials = new List<BuildingMaterial>();
                 data[BunkFreeId] = free;
+
+                // The bunkhouse keeps the Shed's interior but looks like a cabin; each new bunkhouse picks a random cabin skin (log, stone, plank...).
+                if (data.TryGetValue("Cabin", out var cabin))
+                {
+                    CopyLook(cabin, bunk);
+                    CopyLook(cabin, free);
+                    Monitor.Log($"Cabin look: size {cabin.Size.X}x{cabin.Size.Y}, door {cabin.HumanDoor.X},{cabin.HumanDoor.Y}, skins [{string.Join(", ", cabin.Skins?.Select(k => k.Id) ?? Enumerable.Empty<string>())}]", LogLevel.Debug);
+                }
             });
         }
         else if (e.NameWithoutLocale.IsEquivalentTo("Data/Objects"))

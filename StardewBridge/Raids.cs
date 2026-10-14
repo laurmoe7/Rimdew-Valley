@@ -53,7 +53,7 @@ public partial class ModEntry
             default:
                 // RimWorld raids come in flavours (arrival strategies); pick one at random.
                 double roll = Game1.random.NextDouble();
-                StartRaid(roll < 0.5 ? "standard" : roll < 0.75 ? "sapper" : "droppod", label, points);
+                StartRaid(roll < 0.4 ? "human" : roll < 0.6 ? "standard" : roll < 0.8 ? "sapper" : "droppod", label, points);
                 break;
         }
     }
@@ -80,6 +80,11 @@ public partial class ModEntry
             case "mech":
                 Hud($"{label}: a mech cluster crashes down on the farm in 5 seconds!", HUDMessage.error_type);
                 pendingSpawns.Add((now + 300, Math.Clamp(points / 250, 2, 6), "golem"));
+                break;
+            case "human":
+                int humans = Math.Clamp(points / 120, 2, 8);
+                Hud($"{label}! {humans} raiders approach the farm. Down them and capture them. They arrive in 10 seconds.", HUDMessage.error_type);
+                pendingSpawns.Add((now + 600, humans, "human"));
                 break;
             case "manhunter":
                 Hud($"{label}: a pack of animals has gone manhunter! {n} are charging the farm in 5 seconds.", HUDMessage.error_type);
@@ -144,6 +149,7 @@ public partial class ModEntry
                     "sapper" => new DustSpirit(pos),
                     "golem" => new RockGolem(pos),
                     "manhunter" => new Bat(pos),
+                    "human" => new HumanRaider(pos, HumanRaider.Looks[rng.Next(HumanRaider.Looks.Length)], HumanRaider.Names[rng.Next(HumanRaider.Names.Length)], rng.NextDouble() < 0.5),
                     _ => new Grub(pos)
                 };
                 if (kind == "sapper") m.modData[SapperKey] = "1";
@@ -159,7 +165,9 @@ public partial class ModEntry
     /// <summary>Monsters still on the farm at day's end trample crops, then leave.</summary>
     private void TrampleCrops(Farm farm)
     {
-        int monsters = farm.characters.OfType<Monster>().Count();
+        int escaped = farm.characters.OfType<HumanRaider>().Count(r => r.Downed);
+        if (escaped > 0) Hud($"{escaped} downed raider{(escaped == 1 ? "" : "s")} crawled away overnight.", HUDMessage.error_type);
+        int monsters = farm.characters.OfType<Monster>().Count(m => !(m is HumanRaider { Downed: true }));
         if (monsters == 0) return;
         var crops = FarmCrops(farm).ToList();
         int n = Math.Min(crops.Count, monsters * 2);

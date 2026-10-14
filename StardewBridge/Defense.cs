@@ -128,7 +128,7 @@ public partial class ModEntry
 
         foreach (var m in farm.characters.OfType<Monster>().ToList())
         {
-            if (m.Health <= 0) continue;
+            if (!IsTarget(m)) continue;
             var box = m.GetBoundingBox();
 
             // traps: triggered by the monster's centre tile

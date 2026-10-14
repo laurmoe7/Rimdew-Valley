@@ -93,7 +93,7 @@ public partial class ModEntry
     private Vector2 HomeFor(int i)
     {
         var farm = Game1.getFarm();
-        var bunks = farm.buildings.Where(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0).ToList();
+        var bunks = farm.buildings.Where(b => IsBunk(b) && b.daysOfConstructionLeft.Value <= 0).ToList();
         int bunkIndex = i / BunkCapacity;
         if (bunkIndex < bunks.Count)
         {
@@ -111,7 +111,7 @@ public partial class ModEntry
     /// <summary>The bunkhouse door (px) hand i lives behind, or null if there is no bunkhouse for them.</summary>
     private StardewValley.Buildings.Building? BunkFor(int i)
     {
-        var bunks = Game1.getFarm().buildings.Where(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0).ToList();
+        var bunks = Game1.getFarm().buildings.Where(b => IsBunk(b) && b.daysOfConstructionLeft.Value <= 0).ToList();
         int idx = i / BunkCapacity;
         return idx < bunks.Count ? bunks[idx] : null;
     }
@@ -476,7 +476,7 @@ public partial class ModEntry
 
     private void UpdateMonsterVelocities()
     {
-        var live = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
+        var live = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(IsTarget).ToList();
         foreach (var gone in monsterMotion.Keys.Where(k => !live.Contains(k)).ToList()) monsterMotion.Remove(gone);
         foreach (var m in live)
         {
@@ -500,7 +500,7 @@ public partial class ModEntry
         if (Game1.ticks % 300 == 0) { walkCache.Clear(); RefreshHomes(); }
         UpdateMonsterVelocities();
         TickMaintenance();
-        var allMonsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(m => m.Health > 0).ToList();
+        var allMonsters = Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Where(IsTarget).ToList();
         foreach (var a in actors.Values)
         {
             // Each hand has a gun matched to their RimWorld Shooting skill, but it is only drawn while they are defending.
@@ -644,7 +644,7 @@ public partial class ModEntry
     private List<string> HousedNames()
     {
         var housed = new List<string>();
-        var bunks = Game1.getFarm().buildings.Where(b => (b.buildingType.Value == BunkId || b.buildingType.Value == BunkFreeId) && b.daysOfConstructionLeft.Value <= 0).ToList();
+        var bunks = Game1.getFarm().buildings.Where(b => IsBunk(b) && b.daysOfConstructionLeft.Value <= 0).ToList();
         for (int idx = 0; idx < bunks.Count; idx++)
         {
             var indoors = bunks[idx].GetIndoors();

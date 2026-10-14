@@ -46,7 +46,7 @@ public partial class ModEntry
         return taken;
     }
 
-    private bool Calm() => !Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Any(m => m.Health > 0);
+    private bool Calm() => !Game1.getFarm().characters.OfType<StardewValley.Monsters.Monster>().Any(IsTarget);
 
     /// <summary>Every couple of seconds, give idle hands something to do.</summary>
     private void TickMaintenance()

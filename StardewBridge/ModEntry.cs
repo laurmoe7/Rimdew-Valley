@@ -15,6 +15,7 @@ public class SaveData
     public string ResearchTarget { get; set; } = "";
     public long LastEarned { get; set; }
     public Dictionary<string, double> Hunger { get; set; } = new(); // hand name -> 0 (full) .. 100 (starving)
+    public List<string> Captives { get; set; } = new();   // downed raiders you captured: "Name|Look"
     public Dictionary<string, int> Priorities { get; set; } = new(); // "name|task" -> 0..4
 }
 
@@ -41,11 +42,15 @@ public partial class ModEntry : Mod
         hub = new HubClient("127.0.0.1", 7777, m => Monitor.Log(m, LogLevel.Info));
 
         helper.Events.GameLoop.SaveLoaded += (_, _) => OnSaveLoaded();
-        helper.Events.GameLoop.Saving += (_, _) => Helper.Data.WriteSaveData("state", data);
+        helper.Events.GameLoop.Saving += (_, _) => { ClearRaidersBeforeSave(); Helper.Data.WriteSaveData("state", data); };
         helper.Events.GameLoop.DayStarted += (_, _) => OnDayStarted();
         helper.Events.GameLoop.DayEnding += (_, _) => OnDayEnding();
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         helper.Events.Input.ButtonPressed += OnButtonPressed;
+        helper.Events.World.BuildingListChanged += OnBuildingListChanged;
+        helper.Events.GameLoop.UpdateTicked += (_, _) => TickFreeBuild();
+        helper.Events.GameLoop.DayStarted += (_, _) => AssignCabinLooks();
+        helper.Events.GameLoop.SaveLoaded += (_, _) => AssignCabinLooks();
         helper.Events.Display.MenuChanged += OnMenuChanged;
         helper.Events.Display.RenderedWorld += DrawHeldGun;
         helper.Events.Content.AssetRequested += OnAssetRequested;

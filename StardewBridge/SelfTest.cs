@@ -58,7 +58,7 @@ public partial class ModEntry
             }
             if (t == 240)
             {
-                var bunk = farm.buildings.FirstOrDefault(b => b.buildingType.Value == BunkFreeId || b.buildingType.Value == BunkId);
+                var bunk = farm.buildings.FirstOrDefault(b => IsBunk(b));
                 var indoors = bunk?.GetIndoors();
                 if (indoors == null) { St("FAIL: no bunkhouse interior"); }
                 else
