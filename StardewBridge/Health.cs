@@ -50,6 +50,7 @@ public partial class ModEntry
     {
         LastHealth = msg;
         OnDrugState(msg["drugs"] as JObject);
+        OnFarmerMind(msg);
         double moving = (double)msg["moving"]!, manip = (double)msg["manipulation"]!, pain = (double)msg["pain"]!;
         double conscious = (double)msg["consciousness"]!;
         bleed = (double)msg["bleed"]!;

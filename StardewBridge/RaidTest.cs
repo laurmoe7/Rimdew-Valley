@@ -120,6 +120,102 @@ public partial class ModEntry
            $"buff={(buff == null ? "none" : $"{buff.displayName} speed {buff.effects.Speed.Value} attack {buff.effects.Attack.Value} farming {buff.effects.FarmingLevel.Value} ({buff.description})")} drugActive={drugActive}");
     }
 
+    private bool mdDone;
+    private int mdStart = -1, mdFoodBefore, mdBasePrice, mdBaseSell;
+    private Vector2 mdFence, mdWanderFrom;
+
+    /// <summary>RIMDEW_MINDTEST=1: a hand goes through a food binge (food leaves the chests), a tantrum (a fence near them is knocked over)
+    /// and a sad wander (walks around); then the farmer crafts while inspired (iridium) and shops while inspired to trade.</summary>
+    private void TickMindTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_MINDTEST") != "1" || mdDone || !Context.IsWorldReady) return;
+        if (mdStart < 0) mdStart = (int)e.Ticks;
+        int t = (int)e.Ticks - mdStart;
+        var farm = Game1.getFarm();
+        string? hand = FirstHand;
+        try
+        {
+            if (t == 120)
+            {
+                if (hand == null) { Rt("MIND no farmhands in this save"); mdDone = true; return; }
+                SetTime(900);
+                DevBreak(hand, "");
+                var chest = FarmChests().FirstOrDefault();
+                chest?.addItem(ItemRegistry.Create("(O)24", 12));
+                mdFoodBefore = CountFood(i => FoodGrade(i) > 0);
+                Rt($"MIND setup: hand {hand}, food in chests {mdFoodBefore}, chest at {chest?.TileLocation}");
+            }
+            if (t == 200) DevBreak(hand!, "Binging_Food");
+            if (t == 1400)
+            {
+                var a = actors[hand!];
+                Rt($"MIND binge: break={(string?)HandInfo(hand!)?["break"]} kind={BreakKind(hand!)} food {mdFoodBefore} -> {CountFood(i => FoodGrade(i) > 0)}, acts today {ActsToday(hand!, "binge")}, activity '{a.Activity}', hunger {HungerOf(hand!):0}");
+                // a fence right next to them to knock over
+                var at = (a.Inside ? a.Door ?? a.Home : a.Pos) / 64f;
+                for (int r = 1; r < 6 && mdFence == Vector2.Zero; r++)
+                    foreach (var d in new[] { new Vector2(r, 0), new Vector2(-r, 0), new Vector2(0, r), new Vector2(0, -r) })
+                    {
+                        var tile = new Vector2((int)at.X, (int)at.Y) + d;
+                        if (!Walkable(new Point((int)tile.X, (int)tile.Y)) || farm.objects.ContainsKey(tile)) continue;
+                        farm.objects.Add(tile, new Fence(tile, "322", false));
+                        mdFence = tile; break;
+                    }
+                Rt($"MIND fence placed at {mdFence}");
+                DevBreak(hand!, "Tantrum");
+            }
+            if (t == 2600)
+            {
+                Rt($"MIND tantrum: kind={BreakKind(hand!)} fence still there={farm.objects.ContainsKey(mdFence)}, knocked over today {ActsToday(hand!, "smash")}, debris items on farm {farm.debris.Count(d => d.item != null)}, activity '{actors[hand!].Activity}'");
+                farm.objects.Remove(mdFence);
+                mdWanderFrom = actors[hand!].Pos;
+                DevBreak(hand!, "Wander_Sad");
+            }
+            if (t == 3300)
+            {
+                var a = actors[hand!];
+                Rt($"MIND wander: kind={BreakKind(hand!)} moved {Vector2.Distance(a.Pos, mdWanderFrom) / 64f:0.0} tiles, activity '{a.Activity}', jobs {a.Jobs.Count + (a.Current != null ? 1 : 0)} ({a.Current?.Kind})");
+                DevBreak(hand!, "");
+                DevInspire("farmer", "Inspired_Creativity");
+            }
+            if (t == 3500)
+            {
+                Rt($"MIND farmer inspiration: '{FarmerInspiration}' ({FarmerInspirationLabel})");
+                Game1.player.craftingRecipes.TryAdd("Field Snack", 0);
+                bool free = Config.FreeCrafting;
+                Config.FreeCrafting = true;
+                var page = new StardewValley.Menus.CraftingPage(0, 0, 800, 600, false, true);
+                var comp = page.pagesOfCraftingRecipes.SelectMany(pg => pg).FirstOrDefault(kv => kv.Value.name == "Field Snack").Key;
+                if (comp == null) Rt("MIND craft: Field Snack not on the crafting page");
+                else
+                {
+                    Helper.Reflection.GetMethod(page, "clickCraftingRecipe").Invoke(comp, true);
+                    var held = Helper.Reflection.GetField<Item>(page, "heldItem").GetValue();
+                    Rt($"MIND craft: made {held?.Name} quality {(held as StardewValley.Object)?.Quality} (4 = iridium); inspiration now '{FarmerInspiration}'");
+                }
+                Config.FreeCrafting = free;
+                RefreshRimWorld();
+            }
+            if (t == 3700)
+            {
+                Rt($"MIND after crafting, RimWorld says farmer inspiration '{(string?)LastHealth?["inspiration"]}'");
+                mdBaseSell = ItemRegistry.Create<StardewValley.Object>("(O)24").sellToStorePrice();
+                Utility.TryOpenShopMenu("SeedShop", null as string, true);
+            }
+            if (t == 3720) { mdBasePrice = (Game1.activeClickableMenu as StardewValley.Menus.ShopMenu)?.itemPriceAndStock.Values.First().Price ?? -1; Game1.exitActiveMenu(); DevInspire("farmer", "Inspired_Trade"); }
+            if (t == 3900) Utility.TryOpenShopMenu("SeedShop", null as string, true);
+            if (t == 3920)
+            {
+                int price = (Game1.activeClickableMenu as StardewValley.Menus.ShopMenu)?.itemPriceAndStock.Values.First().Price ?? -1;
+                int sell = ItemRegistry.Create<StardewValley.Object>("(O)24").sellToStorePrice();
+                Game1.exitActiveMenu();
+                Rt($"MIND trade: inspiration '{FarmerInspiration}', first seed price {mdBasePrice} -> {price}, parsnip sells {mdBaseSell} -> {sell}");
+                Send(new JObject { ["type"] = "use_inspiration", ["who"] = "farmer" });
+                mdDone = true;
+            }
+        }
+        catch (Exception ex) { Rt("MIND EXCEPTION: " + ex); mdDone = true; }
+    }
+
     private bool cxDone;
     private int cxStart = -1;
 
@@ -507,6 +603,7 @@ public partial class ModEntry
         TickChestSettingsTest(e);
         TickCheerTest(e);
         TickDrinkTest(e);
+        TickMindTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;

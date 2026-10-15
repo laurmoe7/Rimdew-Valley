@@ -119,6 +119,9 @@ namespace RimDewBridge
                 case "dev_incident": FireIncident(m.Str("def")); break;
                 case "dev_addict": DevAddict(m.Str("item")); break;
                 case "dev_sober": DevSoberUp(); break;
+                case "use_inspiration": UseInspiration(m.Str("who")); break;
+                case "dev_inspire": DevInspire(m.Str("who"), m.Str("def")); break;
+                case "dev_break": DevBreak(m.Str("who"), m.Str("def")); break;
             }
         }
 
@@ -280,7 +283,7 @@ namespace RimDewBridge
                 if (!h.Visible || IsDrug(h) || injuries.Count >= 8) continue;
                 injuries.Add(h.LabelCap + (h.Part != null ? " (" + h.Part.Label + ")" : "") + (h.IsTended() ? " [tended]" : ""));
             }
-            Send(new Dictionary<string, object>
+            var health = new Dictionary<string, object>
             {
                 { "type", "health_state" }, { "mood", Math.Round(p.needs != null && p.needs.mood != null ? Mood(p) : 0.5f, 2) }, { "phase", day ? "day" : tend ? "tend" : "event" },
                 { "dead", p.Dead },
@@ -293,7 +296,9 @@ namespace RimDewBridge
                 { "consciousness", Math.Round(cap.GetLevel(PawnCapacityDefOf.Consciousness), 2) },
                 { "injuries", injuries },
                 { "drugs", DrugReport(p) }
-            });
+            };
+            AddMind(health, p);
+            Send(health);
             if (p.Dead) ResurrectionUtility.TryResurrect(p);
         }
 
@@ -310,6 +315,7 @@ namespace RimDewBridge
             {
                 var p = kv.Value;
                 if (p == null || p.Dead || p.needs == null) continue;
+                Redraft(p);
                 if (p.needs.food != null) p.needs.food.CurLevel = Mathf.Max(p.needs.food.CurLevel, 0.8f);
                 if (p.needs.rest != null) p.needs.rest.CurLevel = Mathf.Max(p.needs.rest.CurLevel, 0.9f);
                 GainThought(p, "valley_life"); // offsets the gloom of standing on a bare map; see Thoughts_Stardew.xml
@@ -409,14 +415,16 @@ namespace RimDewBridge
                 if (!kv.Key.StartsWith("hand:") || p == null || p.Dead || p.needs == null || p.needs.mood == null) continue;
                 float mood = Mood(p);
                 bool able = !p.Downed && !p.InMentalState;
-                hands.Add(new Dictionary<string, object>
+                var entry = new Dictionary<string, object>
                 {
                     { "name", kv.Key.Substring(5) }, { "mood", Math.Round(mood, 2) },
                     { "plants", p.skills.GetSkill(SkillDefOf.Plants).Level }, { "animals", p.skills.GetSkill(SkillDefOf.Animals).Level },
                     { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
                     { "thoughts", MoodThoughts(p) }, { "needs", NeedLevels(p) }, { "traits", TraitList(p) },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
-                });
+                };
+                AddMind(entry, p);
+                hands.Add(entry);
             }
             Send(new Dictionary<string, object> { { "type", "hands_info" }, { "hands", hands } });
         }
@@ -476,6 +484,7 @@ namespace RimDewBridge
                 int animals = p.skills.GetSkill(SkillDefOf.Animals).Level;
                 bool able = !p.Downed && !p.InMentalState;
                 double hours = able ? 10.0 * (0.5 + mood) * Math.Max(0.1, p.health.capacities.GetLevel(PawnCapacityDefOf.Manipulation)) * WorkHoursFactor(p) : 0;
+                if (p.Inspired && p.InspirationDef.defName == "Frenzy_Work") hours *= 1.5;   // work frenzy
                 double green = HasTrait(p, "SD_GreenThumb") ? 1.3 : 1.0;
                 var rate = new Dictionary<string, double>
                 {
@@ -493,7 +502,7 @@ namespace RimDewBridge
                     double n = Math.Min(remaining[task], h * rate[task]);
                     done[task] += n; mine[task] += n; remaining[task] -= n; hours -= h; workedHours += h;
                 }
-                hands.Add(new Dictionary<string, object>
+                var entry = new Dictionary<string, object>
                 {
                     { "name", name }, { "mood", Math.Round(mood, 2) }, { "plants", plants }, { "animals", animals },
                     { "shooting", p.skills.GetSkill(SkillDefOf.Shooting).Level },
@@ -501,7 +510,9 @@ namespace RimDewBridge
                     { "hours", Math.Round(workedHours, 1) },
                     { "did_water", (int)mine["water"] }, { "did_harvest", (int)mine["harvest"] }, { "did_feed", (int)mine["animals"] },
                     { "status", !able ? (p.InMentalState ? "mental break" : "downed") : mood < 0.3f ? "unhappy" : "ok" }
-                });
+                };
+                AddMind(entry, p);
+                hands.Add(entry);
             }
             return new Dictionary<string, object>
             {

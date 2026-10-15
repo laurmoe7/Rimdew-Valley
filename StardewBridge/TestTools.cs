@@ -196,6 +196,7 @@ public partial class ModEntry
 
     private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
     {
+        if (e.NewMenu is StardewValley.Menus.ShopMenu shop && !catalogueOpen) DiscountShop(shop);
         if (catalogueOpen && e.OldMenu is StardewValley.Menus.ShopMenu && e.NewMenu is not StardewValley.Menus.ShopMenu)
         {
             // Everything bought was free: put the player's real gold back.

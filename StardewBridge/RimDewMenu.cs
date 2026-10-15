@@ -197,7 +197,7 @@ public partial class RimDewMenu : IClickableMenu
         else
         {
             double mood = (double)info["mood"]!;
-            Text(b, $"{moodPopup}: mood {mood:0.00} ({(string)info["status"]!})", x, y, big: true);
+            Text(b, $"{moodPopup}: mood {mood:0.00} ({ModEntry.StatusText(info)})", x, y, big: true);
             y += 40;
             string traitLine = mod.TraitSummary(moodPopup);
             Text(b, traitLine == "" ? "No traits" : "Traits: " + Fit(traitLine, 480), x, y, Color.DarkSlateBlue);
@@ -283,7 +283,7 @@ public partial class RimDewMenu : IClickableMenu
             {
                 double mood = (double)info["mood"]!;
                 Bar(b, new Rectangle(c.X + 110, ry + 4, 150, 20), mood, MoodColor(mood));
-                Text(b, $"{(string)info["status"]!}  Plants {(int)info["plants"]!}  Animals {(int)info["animals"]!}  worked {(double)info["hours"]!}h", c.X + 275, ry);
+                Text(b, $"{ModEntry.StatusText((JObject)info)}  Plants {(int)info["plants"]!}  Animals {(int)info["animals"]!}  worked {(double)info["hours"]!}h", c.X + 275, ry);
             }
             else Text(b, "waiting for RimWorld (sleep a night)", c.X + 110, ry, Color.Gray);
 
@@ -363,6 +363,7 @@ public partial class RimDewMenu : IClickableMenu
             Text(b, $"{v:P0}", c.X + 615, ry);
         }
         Text(b, $"Pain {(double)h["pain"]!:P0}    Bleeding {(double)h["bleed"]!:0.00}/day", c.X, c.Y + 148);
+        if (mod.FarmerInspirationLabel != "") Text(b, $"Inspired: {mod.FarmerInspirationLabel}", c.X + c.Width / 2, c.Y + 148, Color.DarkGoldenrod);
         Text(b, "Injuries:", c.X, c.Y + 188);
         var injuries = ((JArray)h["injuries"]!).Select(x => (string)x!).ToList();
         if (injuries.Count == 0) Text(b, "None", c.X + 20, c.Y + 222, Color.ForestGreen);
@@ -448,6 +449,12 @@ public partial class RimDewMenu : IClickableMenu
             ("Drinks", new (string, Action)[] { ("Drink beer", () => mod.Drink("Beer", 1)), ("Drink coffee", () => mod.Drink("PsychiteTea", 1)),
                 ("Triple shot", () => mod.Drink("WakeUp", 1)), ("+2 hours", () => mod.AdvanceDrugClock(120)),
                 ("Addict me: alcohol", () => mod.DevAddict("Beer")), ("Sober up", mod.DevSoberUp) }),
+            ("Minds", new (string, Action)[] { ("Inspire me: creativity", () => mod.DevInspire("farmer", "Inspired_Creativity")),
+                ("Inspire me: trade", () => mod.DevInspire("farmer", "Inspired_Trade")),
+                ("Hand: food binge", () => { if (mod.FirstHand is { } h) mod.DevBreak(h, "Binging_Food"); }),
+                ("Hand: tantrum", () => { if (mod.FirstHand is { } h) mod.DevBreak(h, "Tantrum"); }),
+                ("Hand: sad wander", () => { if (mod.FirstHand is { } h) mod.DevBreak(h, "Wander_Sad"); }),
+                ("Hand: calm down", () => { if (mod.FirstHand is { } h) mod.DevBreak(h, ""); }) }),
             ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
                 ("Cheer everyone", () => mod.SendMoodEventToAll("cheered")), ("Upset everyone", () => mod.SendMoodEventToAll("upset")),
                 ("+200 research", () => mod.AddResearchPoints(200)) }),

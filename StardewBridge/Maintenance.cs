@@ -15,7 +15,7 @@ public partial class ModEntry
     private const double RefuelBelowHours = 8, ReloadBelowAmmo = 40;
     private const int RepairBelowHp = 60;
 
-    private static bool IsMaintJob(HandJob j) => j.Kind is "refuel" or "reload" or "repair" or "cook" or "eat" or "stock" or "heat";
+    private static bool IsMaintJob(HandJob j) => j.Kind is "refuel" or "reload" or "repair" or "cook" or "eat" or "stock" or "heat" or "binge" or "smash";
 
     private IEnumerable<Chest> FarmChests() =>
         Game1.getFarm().objects.Values.OfType<Chest>().Where(c => c.playerChest.Value && c.SpecialChestType == Chest.SpecialChestTypes.None);

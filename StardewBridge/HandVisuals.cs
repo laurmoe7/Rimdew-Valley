@@ -286,8 +286,9 @@ public partial class ModEntry
             string name = (string)f["name"]!;
             var existing = LastHands.FirstOrDefault(h => (string?)h["name"] == name) as JObject;
             if (existing == null) { var copy = (JObject)f.DeepClone(); copy["hours"] = 0.0; LastHands.Add(copy); }
-            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status", "thoughts", "needs", "traits" }) existing[key] = f[key];
+            else foreach (var key in new[] { "mood", "plants", "animals", "shooting", "status", "thoughts", "needs", "traits", "break", "break_label", "inspiration", "inspiration_label" }) existing[key] = f[key];
         }
+        NoteHandMinds();
         foreach (var gone in LastHands.Where(h => !data.Hands.Contains((string)h["name"]!)).ToList()) gone.Remove();
     }
 
@@ -309,6 +310,7 @@ public partial class ModEntry
     private void OnWorkDone(JObject msg)
     {
         LastHands = (JArray)msg["hands"]!;
+        NoteHandMinds();
         if (data.Hands.Count == 0) return;
         SyncHands(false);
         var farm = Game1.getFarm();
@@ -511,6 +513,7 @@ public partial class ModEntry
             a.Weapon = GunForSkill((int?)skillInfo?["shooting"] ?? 3);
             a.Armed = false;   // guns only come out while defending (Fight() sets this)
             a.Aim = a.Dir switch { 0 => 1.25f, 1 => 0.35f, 2 => -1.25f, _ => MathHelper.Pi - 0.35f };
+            if (a.Current == null && a.Jobs.Count == 0 && !a.Drafted) PlanBreakAct(a);   // a mental break plays out instead of chores
 
             // Give up on monsters that cannot be shot (beyond a fence, across water) until they come close; otherwise hands stand and stare.
             foreach (var gone in a.Ignored.Keys.Where(k => k.Health <= 0 || Game1.ticks >= a.Ignored[k]).ToList()) a.Ignored.Remove(gone);
@@ -548,7 +551,7 @@ public partial class ModEntry
             }
             if (!arrived)
             {
-                a.Activity = a.Current == null ? "heading home" : "walking";
+                a.Activity = a.Current == null ? "heading home" : a.Current.Kind == "wander" ? "wandering" : "walking";
             }
             else
             {
@@ -569,6 +572,9 @@ public partial class ModEntry
                     "repair" => a.Current.Fetched ? "repairing" : "fetching fiber",
                     "cook" => a.Current.Fetched ? "cooking" : "fetching food",
                     "eat" => "eating",
+                    "binge" => "binging",
+                    "smash" => "in a tantrum",
+                    "wander" => "wandering",
                     "stock" => a.Current.Fetched ? "stocking dispenser" : "fetching food",
                     "heat" => a.Current.Fetched ? "microwaving" : "fetching frozen food",
                     _ => "feeding"
@@ -692,6 +698,12 @@ public partial class ModEntry
             case "heat":
             case "eat":
                 DoMaintenance(j);
+                break;
+            case "binge":
+                Binge(j);
+                break;
+            case "smash":
+                Smash(j);
                 break;
             case "animals":
                 if (j.Animal != null && j.Animal.fullness.Value < 200)
