@@ -278,6 +278,8 @@ public partial class ModEntry
         Hud("Mood events sent to every villager and farmhand.", HUDMessage.achievement_type);
     }
 
+    internal void DevAddict(string drug) => Send(new JObject { ["type"] = "dev_addict", ["item"] = drug });
+    internal void DevSoberUp() => Send(new JObject { ["type"] = "dev_sober" });
     internal void FireRimWorldIncident(string def) => Send(new JObject { ["type"] = "dev_incident", ["def"] = def });
     internal void AddResearchPoints(int n) => Send(new JObject { ["type"] = "research_points", ["amount"] = n });
     internal void RefreshRimWorld() => Send(new JObject { ["type"] = "report" });

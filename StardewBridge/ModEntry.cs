@@ -46,6 +46,7 @@ public partial class ModEntry : Mod
         helper.Events.GameLoop.DayStarted += (_, _) => OnDayStarted();
         helper.Events.GameLoop.DayEnding += (_, _) => OnDayEnding();
         helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+        helper.Events.GameLoop.TimeChanged += (_, _) => OnTimeChangedDrugs();
         helper.Events.Input.ButtonPressed += OnButtonPressed;
         helper.Events.World.BuildingListChanged += OnBuildingListChanged;
         helper.Events.Display.RenderedActiveMenu += DrawChestPriority;

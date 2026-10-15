@@ -366,7 +366,12 @@ public partial class RimDewMenu : IClickableMenu
         Text(b, "Injuries:", c.X, c.Y + 188);
         var injuries = ((JArray)h["injuries"]!).Select(x => (string)x!).ToList();
         if (injuries.Count == 0) Text(b, "None", c.X + 20, c.Y + 222, Color.ForestGreen);
-        for (int i = 0; i < injuries.Count; i++) Text(b, "- " + Fit(injuries[i], c.Width - 40), c.X + 20, c.Y + 222 + i * 30);
+        for (int i = 0; i < injuries.Count; i++) Text(b, "- " + Fit(injuries[i], c.Width / 2 - 40), c.X + 20, c.Y + 222 + i * 30);
+        int dx = c.X + c.Width / 2;
+        var drugs = mod.DrugLines().Concat(mod.LastTolerance).ToList();
+        Text(b, "Drink and drugs:", dx, c.Y + 188);
+        if (drugs.Count == 0) Text(b, "Sober", dx + 20, c.Y + 222, Color.ForestGreen);
+        for (int i = 0; i < drugs.Count; i++) Text(b, "- " + Fit(drugs[i], c.Width / 2 - 40), dx + 20, c.Y + 222 + i * 30, drugs[i].Contains("withdrawal") ? Color.Firebrick : Game1.textColor);
     }
 
     private void DrawColony(SpriteBatch b)
@@ -440,6 +445,9 @@ public partial class RimDewMenu : IClickableMenu
                 ("Minigun", () => mod.GiveGunById("Minigun")) }),
             ("Injury", new (string, Action)[] { ("Hurt: blunt", () => mod.HurtMe("blunt", 15)), ("Hurt: bite", () => mod.HurtMe("bite", 15)),
                 ("Hurt: cut", () => mod.HurtMe("cut", 15)), ("Tend wounds", mod.Tend) }),
+            ("Drinks", new (string, Action)[] { ("Drink beer", () => mod.Drink("Beer", 1)), ("Drink coffee", () => mod.Drink("PsychiteTea", 1)),
+                ("Triple shot", () => mod.Drink("WakeUp", 1)), ("+2 hours", () => mod.AdvanceDrugClock(120)),
+                ("Addict me: alcohol", () => mod.DevAddict("Beer")), ("Sober up", mod.DevSoberUp) }),
             ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
                 ("Cheer everyone", () => mod.SendMoodEventToAll("cheered")), ("Upset everyone", () => mod.SendMoodEventToAll("upset")),
                 ("+200 research", () => mod.AddResearchPoints(200)) }),

@@ -87,6 +87,39 @@ public partial class ModEntry
         catch (Exception ex) { Rt("CHEER EXCEPTION: " + ex); chDone = true; }
     }
 
+    private bool dkDone;
+    private int dkStart = -1;
+
+    /// <summary>RIMDEW_DRINKTEST=1: drink through the real eat hook, get hammered, sleep it off into a hangover, try a triple shot,
+    /// then an alcohol addiction into withdrawal. Logs the RimWorld report and the body buff at each step.</summary>
+    private void TickDrinkTest(UpdateTickedEventArgs e)
+    {
+        if (Environment.GetEnvironmentVariable("RIMDEW_DRINKTEST") != "1" || dkDone || !Context.IsWorldReady) return;
+        if (dkStart < 0) dkStart = (int)e.Ticks;
+        int t = (int)e.Ticks - dkStart;
+        try
+        {
+            if (t == 120) { DevSoberUp(); RefreshRimWorld(); }
+            if (t == 300) { Game1.player.eatObject(ItemRegistry.Create<StardewValley.Object>("(O)346")); Drink("Beer", 4); }
+            // the clock runs in 10-minute steps, as in play (a hangover is renewed while still hammered)
+            if (t == 600) { DrinkLog("5 beers"); for (int i = 0; i < 24; i++) AdvanceDrugClock(10); }
+            if (t == 900) { DrinkLog("+4 hours"); for (int i = 0; i < 120; i++) AdvanceDrugClock(10); }
+            if (t == 1200) { DrinkLog("+20 more hours (should be sober, with a hangover)"); DevSoberUp(); Drink("WakeUp", 1); }
+            if (t == 1500) { DrinkLog("sober, then a triple shot"); DevSoberUp(); DevAddict("Beer"); AdvanceDrugClock(60); }
+            if (t == 1800) { DrinkLog("addicted to alcohol, +1 hour"); Drink("Beer", 1); }
+            if (t == 2100) { DrinkLog("addicted, drank a beer"); DevSoberUp(); dkDone = true; }
+        }
+        catch (Exception ex) { Rt("DRINK EXCEPTION: " + ex); dkDone = true; }
+    }
+
+    private void DrinkLog(string step)
+    {
+        var h = LastHealth;
+        var buff = Game1.player.buffs.AppliedBuffs.TryGetValue(InjuryBuffId, out var bf) ? bf : null;
+        Rt($"DRINK {step}: drugs={h?["drugs"]?.ToString(Newtonsoft.Json.Formatting.None)} moving={h?["moving"]} manip={h?["manipulation"]} consc={h?["consciousness"]} mood={h?["mood"]} " +
+           $"buff={(buff == null ? "none" : $"{buff.displayName} speed {buff.effects.Speed.Value} attack {buff.effects.Attack.Value} farming {buff.effects.FarmingLevel.Value} ({buff.description})")} drugActive={drugActive}");
+    }
+
     private bool cxDone;
     private int cxStart = -1;
 
@@ -473,6 +506,7 @@ public partial class ModEntry
         TickDraftTest(e);
         TickChestSettingsTest(e);
         TickCheerTest(e);
+        TickDrinkTest(e);
         if (!raidTest || !Context.IsWorldReady) return;
         if (rtStart < 0) { rtStart = (int)e.Ticks; Rt("world ready"); }
         int t = (int)e.Ticks - rtStart - 90;

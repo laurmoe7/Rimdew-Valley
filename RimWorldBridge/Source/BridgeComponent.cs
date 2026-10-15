@@ -14,7 +14,7 @@ namespace RimDewBridge
     ///   "farmer"    = the player (injury sim)
     ///   "hand:Name" = hired farmhand (skills/mood decide work output)
     /// </summary>
-    public class BridgeComponent : GameComponent
+    public partial class BridgeComponent : GameComponent
     {
         public static BridgeComponent Instance;
         private const int TicksPerDay = 20000; // a third of a RimWorld day keeps the nightly sim to a few seconds
@@ -105,6 +105,8 @@ namespace RimDewBridge
                 case "research_set": researchTarget = m.Str("id"); break;
                 case "day_end": BeginDay(m); break;
                 case "hand_xp": HandXp(m); break;
+                case "ingest": Ingest(m.Str("item"), (int)m.Num("count", 1)); break;
+                case "drug_clock": DrugClock((int)m.Num("minutes")); break;
                 // --- test tools (Stardew menu > Test tab) ---
                 case "report":
                     ForgetHiddenMapMemories();
@@ -115,6 +117,8 @@ namespace RimDewBridge
                     break;
                 case "research_points": ApplyResearch(m.Num("amount")); SendResearch(); break;
                 case "dev_incident": FireIncident(m.Str("def")); break;
+                case "dev_addict": DevAddict(m.Str("item")); break;
+                case "dev_sober": DevSoberUp(); break;
             }
         }
 
@@ -273,7 +277,7 @@ namespace RimDewBridge
             var injuries = new List<object>();
             foreach (var h in p.health.hediffSet.hediffs)
             {
-                if (!h.Visible || injuries.Count >= 8) continue;
+                if (!h.Visible || IsDrug(h) || injuries.Count >= 8) continue;
                 injuries.Add(h.LabelCap + (h.Part != null ? " (" + h.Part.Label + ")" : "") + (h.IsTended() ? " [tended]" : ""));
             }
             Send(new Dictionary<string, object>
@@ -287,7 +291,8 @@ namespace RimDewBridge
                 { "moving", Math.Round(cap.GetLevel(PawnCapacityDefOf.Moving), 2) },
                 { "manipulation", Math.Round(cap.GetLevel(PawnCapacityDefOf.Manipulation), 2) },
                 { "consciousness", Math.Round(cap.GetLevel(PawnCapacityDefOf.Consciousness), 2) },
-                { "injuries", injuries }
+                { "injuries", injuries },
+                { "drugs", DrugReport(p) }
             });
             if (p.Dead) ResurrectionUtility.TryResurrect(p);
         }

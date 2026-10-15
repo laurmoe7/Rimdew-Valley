@@ -49,22 +49,31 @@ public partial class ModEntry
     private void OnHealthState(JObject msg)
     {
         LastHealth = msg;
+        OnDrugState(msg["drugs"] as JObject);
         double moving = (double)msg["moving"]!, manip = (double)msg["manipulation"]!, pain = (double)msg["pain"]!;
+        double conscious = (double)msg["consciousness"]!;
         bleed = (double)msg["bleed"]!;
         bool dead = (bool)msg["dead"]!;
         double pct = (double)msg["health_pct"]!;
         var injuries = ((JArray)msg["injuries"]!).Select(x => (string)x!).ToList();
 
-        // Lasting debuff scaled by mobility, hand function and pain.
+        // Lasting body effect scaled by mobility, hand function, pain and consciousness (injuries, drink, drugs).
         var effects = new BuffEffects();
         effects.Speed.Value = -(float)Math.Round((1 - moving) * 3 + pain * 1.5);
         effects.Attack.Value = -(float)Math.Round((1 - manip) * 4);
+        float sharp = (float)Math.Round((conscious - 1) * 5);   // drunk: fumbling at everything; wake-up: sharper
+        if (conscious > 1.04) sharp = Math.Max(1, sharp);
+        effects.FarmingLevel.Value = effects.MiningLevel.Value = effects.FishingLevel.Value = effects.ForagingLevel.Value = sharp;
         Game1.player.buffs.Remove(InjuryBuffId);
-        if (effects.Speed.Value != 0 || effects.Attack.Value != 0)
+        if (effects.Speed.Value != 0 || effects.Attack.Value != 0 || sharp != 0)
         {
-            Game1.player.applyBuff(new Buff(InjuryBuffId, displaySource: "Injuries", duration: Buff.ENDLESS,
-                effects: effects, isDebuff: true, displayName: "Injured",
-                description: injuries.Count > 0 ? string.Join(", ", injuries) : "Recovering"));
+            var drugs = DrugLines();
+            // Drink and drugs come and go, so they name the effect over (often permanent) injuries.
+            string name = drugs.Count > 0 ? char.ToUpper(drugs[0][0]) + drugs[0][1..] : injuries.Count > 0 ? "Injured" : "Recovering";
+            var causes = injuries.Concat(drugs).ToList();
+            Game1.player.applyBuff(new Buff(InjuryBuffId, displaySource: "Body", duration: Buff.ENDLESS,
+                effects: effects, isDebuff: effects.Speed.Value < 0 || effects.Attack.Value < 0 || sharp < 0, displayName: name,
+                description: causes.Count > 0 ? string.Join(", ", causes) : "Recovering"));
         }
 
         // Farmer's own RimWorld mood (pain, weather, chats, festivals, raids) shifts stamina and luck.
