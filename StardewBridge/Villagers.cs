@@ -11,6 +11,7 @@ public partial class ModEntry
 {
     private readonly Dictionary<string, (int gifts, bool talked)> seenFriendship = new();
     internal readonly Dictionary<string, double> npcMood = new();
+    internal readonly Dictionary<string, List<JObject>> NpcThoughts = new();
     internal readonly HashSet<string> npcBroken = new();
     private Item? heldPrev;
 
@@ -72,6 +73,7 @@ public partial class ModEntry
             double mood = (double)n["mood"]!;
             bool brk = (bool)n["break"]!;
             npcMood[name] = mood;
+            if (n["thoughts"] is JArray th) NpcThoughts[name] = th.OfType<JObject>().ToList();
             NpcLabel[name] = brk ? (string)n["label"]! : "";
             var npc = Game1.getCharacterFromName(name);
             if (npc == null) continue;

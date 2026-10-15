@@ -67,6 +67,10 @@ public class HumanRaider : ShadowBrute
         ModEntry.Instance?.NoteRaiderDown(this);
     }
 
+    /// <summary>A downed raider lies on the ground: no collision box, so the player, hands and other raiders walk over them.
+    /// (Capture uses its own click area; every targeting check already skips downed raiders.)</summary>
+    public override Rectangle GetBoundingBox() => Downed ? new Rectangle(-10000, -10000, 1, 1) : base.GetBoundingBox();
+
     public override void update(GameTime time, GameLocation location)
     {
         if (Downed) return;   // lies where it fell: no AI, no contact damage
@@ -179,9 +183,20 @@ public class HumanRaider : ShadowBrute
         f.draw(b);
 
         var local = Game1.GlobalToLocal(Game1.viewport, Position);
-        string label = Downed ? $"{RaiderName} (downed: right-click to capture)" : $"{RaiderName}{(Ranged ? " (gun)" : "")}";
-        var size = Game1.smallFont.MeasureString(label);
-        Utility.drawTextWithShadow(b, label, Game1.smallFont, new Vector2(local.X + 32 - size.X / 2, local.Y - (Downed ? 24 : 92)), Downed ? Color.Gold : Color.OrangeRed, 1f, 0.99f);
+        // Downed: just the name, plus the capture hint only for the one the player is standing next to.
+        bool near = Downed && Vector2.Distance(Tile, Game1.player.Tile) < 2.5f;
+        string label = Downed ? RaiderName + (near ? " - right-click to capture" : " (downed)") : $"{RaiderName}{(Ranged ? " (gun)" : "")}";
+        DrawLabel(b, label, new Vector2(local.X + 32, local.Y - (Downed ? 24 : 92)), Downed ? Color.Gold : Color.OrangeRed, near ? 0.995f : 0.99f);
+    }
+
+    /// <summary>Text on a dark backing box, centred on x, so it stays readable over grass, paths and other labels.</summary>
+    private static void DrawLabel(SpriteBatch b, string text, Vector2 at, Color color, float depth)
+    {
+        const float scale = 0.8f;
+        var size = Game1.smallFont.MeasureString(text) * scale;
+        var box = new Rectangle((int)(at.X - size.X / 2) - 6, (int)at.Y - 2, (int)size.X + 12, (int)size.Y + 2);
+        b.Draw(Game1.staminaRect, box, null, Color.Black * 0.6f, 0f, Vector2.Zero, SpriteEffects.None, depth - 0.0001f);
+        b.DrawString(Game1.smallFont, text, new Vector2(box.X + 6, box.Y + 1), color, 0f, Vector2.Zero, scale, SpriteEffects.None, depth);
     }
 }
 

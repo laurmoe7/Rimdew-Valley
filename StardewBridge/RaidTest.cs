@@ -65,14 +65,22 @@ public partial class ModEntry
             {
                 chBefore = new Dictionary<string, double>(npcMood);
                 Rt($"CHEER baseline: {chBefore.Count} villagers known, avg mood {(chBefore.Count == 0 ? 0 : chBefore.Values.Average()):0.00}; RimWorldOnline={RimWorldOnline}; villagers that can socialize: {Utility.getAllVillagers().Count(n => n.CanSocialize)}");
-                SendMoodEventToAll("festival", "birthday");
+                SendMoodEventToAll("cheered");
                 Rt("CHEER events sent");
             }
-            if (t == 700) RefreshRimWorld();
             if (t == 1200)
             {
                 var changed = npcMood.Where(kv => chBefore.TryGetValue(kv.Key, out var b) && Math.Abs(b - kv.Value) > 0.001).ToList();
                 Rt($"CHEER result: avg mood {(npcMood.Count == 0 ? 0 : npcMood.Values.Average()):0.00}; {changed.Count}/{npcMood.Count} villagers changed; sample: {string.Join(", ", npcMood.Take(5).Select(kv => $"{kv.Key} {chBefore.GetValueOrDefault(kv.Key):0.00}->{kv.Value:0.00}"))}");
+                foreach (var n in new[] { "Evelyn", "George" })
+                    if (NpcThoughts.TryGetValue(n, out var th)) Rt($"CHEER {n} thoughts: {string.Join("; ", th.Select(x => $"{x["label"]} {x["offset"]}"))}");
+                chBefore = new Dictionary<string, double>(npcMood);
+                SendMoodEventToAll("cheered");   // a second press must move moods again
+            }
+            if (t == 1700)
+            {
+                var changed = npcMood.Where(kv => chBefore.TryGetValue(kv.Key, out var b) && Math.Abs(b - kv.Value) > 0.001).ToList();
+                Rt($"CHEER second press: {changed.Count}/{npcMood.Count} villagers changed; sample: {string.Join(", ", npcMood.Take(5).Select(kv => $"{kv.Key} {chBefore.GetValueOrDefault(kv.Key):0.00}->{kv.Value:0.00}"))}");
                 chDone = true;
             }
         }

@@ -107,6 +107,7 @@ namespace RimDewBridge
                 case "hand_xp": HandXp(m); break;
                 // --- test tools (Stardew menu > Test tab) ---
                 case "report":
+                    ForgetHiddenMapMemories();
                     SendHandsInfo();
                     Send(new Dictionary<string, object> { { "type", "npc_state" }, { "apply", false }, { "npcs", NpcReport() } });
                     SendHealth();
@@ -184,6 +185,19 @@ namespace RimDewBridge
             }
         }
 
+        /// <summary>Shadow pawns stand on a real (hidden) map, so RimWorld hands them memories of things that never happened in the
+        /// valley: corpses, colonists dying, sleeping on the ground, insults. Keep only our own SD_ thoughts (and catharsis after a break).</summary>
+        private void ForgetHiddenMapMemories()
+        {
+            foreach (var p in pawns.Values)
+            {
+                if (p == null || p.Dead || p.needs == null || p.needs.mood == null) continue;
+                var mem = p.needs.mood.thoughts.memories;
+                foreach (var t in mem.Memories.ToList())
+                    if (!t.def.defName.StartsWith("SD_") && t.def.defName != "Catharsis") mem.RemoveMemory(t);
+            }
+        }
+
         private void GainThought(Pawn p, string kind)
         {
             var def = DefDatabase<ThoughtDef>.GetNamedSilentFail("SD_" + Pascal(kind));
@@ -205,7 +219,8 @@ namespace RimDewBridge
                     { "name", kv.Key.Substring(4) },
                     { "mood", Math.Round(mood, 2) },
                     { "break", brk },
-                    { "label", brk ? p.MentalState.def.label : mood < 0.3f ? "unhappy" : mood > 0.7f ? "happy" : "okay" }
+                    { "label", brk ? p.MentalState.def.label : mood < 0.3f ? "unhappy" : mood > 0.7f ? "happy" : "okay" },
+                    { "thoughts", MoodThoughts(p) }
                 });
             }
             return list;
@@ -311,6 +326,7 @@ namespace RimDewBridge
         {
             var m = currentDay ?? new Dictionary<string, object>();
             HealOvernight();
+            ForgetHiddenMapMemories();
             Send(new Dictionary<string, object> { { "type", "npc_state" }, { "npcs", NpcReport() } });
             SendHealth(true);
             Send(WorkReport(m.Obj_("backlog")));

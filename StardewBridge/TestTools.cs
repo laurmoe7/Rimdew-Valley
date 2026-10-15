@@ -274,7 +274,8 @@ public partial class ModEntry
         foreach (var hand in data.Hands)
             foreach (var kind in kinds)
                 SendHandEvent(hand, kind);
-        Hud("Mood events sent to every villager and farmhand. Press 'Refresh data', then open the Villagers tab.", HUDMessage.achievement_type);
+        RefreshRimWorld(); // the hub keeps order, so the report comes back with the new thoughts in it
+        Hud("Mood events sent to every villager and farmhand.", HUDMessage.achievement_type);
     }
 
     internal void FireRimWorldIncident(string def) => Send(new JObject { ["type"] = "dev_incident", ["def"] = def });

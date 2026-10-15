@@ -441,7 +441,7 @@ public partial class RimDewMenu : IClickableMenu
             ("Injury", new (string, Action)[] { ("Hurt: blunt", () => mod.HurtMe("blunt", 15)), ("Hurt: bite", () => mod.HurtMe("bite", 15)),
                 ("Hurt: cut", () => mod.HurtMe("cut", 15)), ("Tend wounds", mod.Tend) }),
             ("RimWorld", new (string, Action)[] { ("Run night now", mod.RunNightNow), ("Refresh data", mod.RefreshRimWorld),
-                ("Cheer everyone", () => mod.SendMoodEventToAll("festival", "birthday")), ("Upset everyone", () => mod.SendMoodEventToAll("gift_hated", "gift_hated")),
+                ("Cheer everyone", () => mod.SendMoodEventToAll("cheered")), ("Upset everyone", () => mod.SendMoodEventToAll("upset")),
                 ("+200 research", () => mod.AddResearchPoints(200)) }),
             ("Furniture", new (string, Action)[] {
                 ("Bed", () => mod.GiveFurniture("bed")), ("Double bed", () => mod.GiveFurniture("doublebed")), ("Chair", () => mod.GiveFurniture("chair")),
